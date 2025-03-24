@@ -1,11 +1,7 @@
 import json
 from os.path import join
 
-<<<<<<< HEAD
-_BASE_DATA_PATH = "../../data"
-=======
 _BASE_DATA_PATH = "../data"
->>>>>>> 13490ca (Fix: Unsupervised Learning)
 
 class ClassInfo:
     _instance = None
