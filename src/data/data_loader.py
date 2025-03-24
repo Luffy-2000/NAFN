@@ -48,13 +48,13 @@ def get_loaders(
     )
 
     if is_unsupervised:
-        # 无监督预训练使用训练集和验证集
+        # Unsupervised pre-training uses training and validation sets
         unsupervised_datamodule = PLDataModule(
             train_set=train_set,
-            val_set=val_set,  # 添加验证集用于监控训练
-            test_set=test_set,  # 添加测试集用于最终评估
-            batch_size=256,  # 设置合适的batch size
-            num_workers=4  # 设置数据加载的工作进程数
+            val_set=val_set,
+            test_set=test_set,  
+            batch_size=256,  
+            num_workers=4  
         )
         return ways, unsupervised_datamodule, None
 

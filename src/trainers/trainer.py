@@ -53,7 +53,7 @@ class TLTrainer:
             'callbacks': self.callbacks[-1]
         }
         
-        # 如果是无监督学习，使用验证集监控训练
+        # If it is unsupervised learning, use the validation set to monitor training
         if hasattr(self.args, 'is_unsupervised') and self.args.is_unsupervised:
             trainer_args['checkpoint_callback'] = ModelCheckpoint(
                 mode='min', 
@@ -74,8 +74,12 @@ class TLTrainer:
         Create a set of default callbacks with the one passed in 'callbacks' 
         """
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         # 如果是无监督学习，使用验证集损失作为监控指标
+=======
+        # If it is unsupervised learning, use the validation set loss as the monitoring indicator
+>>>>>>> 4afd533 (Fix: Modify Comments)
         if hasattr(self.args, 'is_unsupervised') and self.args.is_unsupervised:
             monitor = 'val_loss'
             mode = 'min'
@@ -112,6 +116,7 @@ class TLTrainer:
         self.save_args()
         
 <<<<<<< HEAD
+<<<<<<< HEAD
         self.trainers[0].fit(
             model=approach,
             datamodule=datamodule,
@@ -120,10 +125,13 @@ class TLTrainer:
         )               
 =======
         # 如果是无监督学习，使用datamodule
+=======
+        # If it is unsupervised learning, use datamodule
+>>>>>>> 4afd533 (Fix: Modify Comments)
         if hasattr(approach, 'is_unsupervised') and approach.is_unsupervised:
             self.trainers[0].fit(
                 model=approach,
-                datamodule=datamodule  # 让datamodule自己处理验证集
+                datamodule=datamodule
             )
         else:
             self.trainers[0].fit(
@@ -149,10 +157,13 @@ class TLTrainer:
         Implementation of the fine-tuning stage with a FSL/FSCIL procedure 
         """
 <<<<<<< HEAD
+<<<<<<< HEAD
         if self.args.ft_only or already_resumed:
             # Resumed model weights
 =======
         # 如果使用预训练模型或ft_only或already_resumed，直接使用当前模型
+=======
+>>>>>>> 4afd533 (Fix: Modify Comments)
         if self.args.pretrained_autoencoder or self.args.ft_only or already_resumed:
             # Use current model weights
 >>>>>>> 13490ca (Fix: Unsupervised Learning)
@@ -212,15 +223,22 @@ class TLTrainer:
     
     def save_results(self, eval_res, trainer_idx=-1):
 <<<<<<< HEAD
+<<<<<<< HEAD
         # Saving usefull info
 =======
         # 如果是无监督学习，只清理模型文件
+=======
+        # If it is unsupervised learning, only clean the model file
+>>>>>>> 4afd533 (Fix: Modify Comments)
         if hasattr(self.args, 'is_unsupervised') and self.args.is_unsupervised:
             util.cleanup.cleanup_autoencoder_models(self.trainers[trainer_idx].logger.log_dir)
             return
             
+<<<<<<< HEAD
         # 监督学习的处理
 >>>>>>> 13490ca (Fix: Unsupervised Learning)
+=======
+>>>>>>> 4afd533 (Fix: Modify Comments)
         f1_scores = util.logger.get_metric(
             exp_path=self.trainers[trainer_idx].logger.log_dir,
             folders=['adaptation_data', 'pt_test_data'],

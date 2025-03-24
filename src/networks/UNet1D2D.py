@@ -34,11 +34,10 @@ class Up(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=(2, 2), stride=(2, 2))
-        self.conv = ConvBlock(in_channels, out_channels)  # 注意拼接导致 in_channels
+        self.conv = ConvBlock(in_channels, out_channels) 
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
-        # 尺寸对齐
         diffY = x2.size(2) - x1.size(2)
         diffX = x2.size(3) - x1.size(3)
         x1 = nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2,
@@ -53,7 +52,7 @@ class UNet1D2D(nn.Module):
         self.out_features_size = kwargs['out_features_size'] or 200
         self.inc = ConvBlock(in_channels, base_filters)
         self.down1 = Down(base_filters, base_filters * 2)
-        self.down2 = Down(base_filters * 2, base_filters * 4)  # 到 (5, 1)
+        self.down2 = Down(base_filters * 2, base_filters * 4) 
         self.up1 = Up(base_filters * 4, base_filters * 2)
         self.up2 = Up(base_filters * 2, base_filters)
         self.outc = nn.Conv2d(base_filters, out_channels, kernel_size=1)
@@ -62,7 +61,7 @@ class UNet1D2D(nn.Module):
         self.bottleneck = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),  # (batch, channels, 1, 1)
             nn.Flatten(),
-            nn.Linear(base_filters * 4, self.out_features_size),  # 提取最终表征
+            nn.Linear(base_filters * 4, self.out_features_size),  
             nn.ReLU(inplace=True)
         )
 
@@ -71,22 +70,19 @@ class UNet1D2D(nn.Module):
         x1 = self.inc(x)      # (20, 6)
         x2 = self.down1(x1)   # (10, 3)
         x3 = self.down2(x2)   # (5, 1)
-        # print(x3.shape)
-        features = self.bottleneck(x3)  # bottleneck 特征
+        features = self.bottleneck(x3)  
 
         x = self.up1(x3, x2)  # (10, 3)
         x = self.up2(x, x1)   # (20, 6)
-        out = self.outc(x)    # 输出
+        out = self.outc(x)    # output
         return out, features
     
 
     def extract_features(self, x):
-        """仅用于提取编码器的中间特征 bottleneck"""
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)  # batch, base_filters * 4, 5, 1
-        # print(x3.shape)
-        features = self.bottleneck(x3)  # bottleneck 特征
+        features = self.bottleneck(x3) 
         return features
 
 

@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class ConvBlock(nn.Module):
-    """一维卷积块：
+    """1DCNN：
     (conv1d => BN => ReLU) * 2
     """
     def __init__(self, in_channels, out_channels):
@@ -22,7 +22,7 @@ class ConvBlock(nn.Module):
         return self.conv(x)
 
 class Down(nn.Module):
-    """下采样: maxpool => conv"""
+    """Downsampling: maxpool => conv"""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
@@ -34,7 +34,7 @@ class Down(nn.Module):
         return self.maxpool_conv(x)
 
 class Up(nn.Module):
-    """上采样"""
+    """Upsampling"""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up = nn.Sequential(
@@ -52,42 +52,39 @@ class Up(nn.Module):
         return self.conv(x)
 
 class UNet(nn.Module):
-    """一维UNet网络结构"""
+    """One-dimensional UNet network structure"""
     def __init__(self, in_channels=1, out_channels=1, out_features_size=None, **kwargs):
         super().__init__()
         
-        # 特征提取大小，如果是None则使用默认值200
+        # Feature extraction size, if None, the default value of 200 is used
         self.out_features_size = int(out_features_size if out_features_size is not None else 200)
         
-        # 计算基础通道数
+        # Calculate the number of basic channels
         n1 = 64
         self.filters = [n1, n1 * 2, n1 * 4]  # [64, 128, 256]
         
-        # 编码器部分
+        # Encoder part
         self.inc = ConvBlock(in_channels, self.filters[0])
         self.down1 = Down(self.filters[0], self.filters[1])
         self.down2 = Down(self.filters[1], self.filters[2])
         
-        # 解码器部分
+        # Decoder part
         self.up2 = Up(self.filters[2], self.filters[1])
         self.up1 = Up(self.filters[1], self.filters[0])
         
-        # 输出层
+        # Output layer
         self.outc = nn.Conv1d(self.filters[0], out_channels, kernel_size=1, stride=1, padding=0)
         
-        # 特征提取层
+        # Feature extraction layer
         self.feature_extractor = nn.Sequential(
             nn.AdaptiveAvgPool1d(1),
             nn.Flatten(),
             nn.Linear(self.filters[2], self.out_features_size)
         )
         
-        print(f"Debug - Network structure:")
-        print(f"Filters: {self.filters}")
-        print(f"out_features_size: {self.out_features_size}")
 
     def forward(self, x):
-        # 编码器路径
+        # Encode
         batch, num_channels, num_pkts, num_fields = x.shape
 
         x = x.reshape(batch, num_channels, num_pkts * num_fields)
@@ -95,7 +92,7 @@ class UNet(nn.Module):
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
-        # 解码器路径
+        # Decode
         x = self.up2(x3, x2)
         x = self.up1(x, x1)
         logits = self.outc(x)

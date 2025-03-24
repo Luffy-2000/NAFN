@@ -82,7 +82,7 @@ class LLL_Net(nn.Module):
             x (tensor): input images
             return_features (bool): return the representations before the heads
         """
-        # 如果是自编码器，直接使用其forward方法
+        # If it is an autoencoder, use its forward method directly
         if self.is_unsupervised:
             recon_x, logits = self.model(x)
             y = self.head(logits)

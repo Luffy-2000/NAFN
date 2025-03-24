@@ -96,27 +96,15 @@ class LightningRFS(LightningTLModule):
         ), 'alpha + gamma should be equal to 1'
 
 
-        # 如果指定了预训练的自编码器，加载其权重并冻结
+        # If a pretrained autoencoder is specified, load its weights and freeze them
         if self.pretrained_autoencoder:
             print(f'Loading pretrained autoencoder from {self.pretrained_autoencoder}')
             checkpoint = torch.load(self.pretrained_autoencoder, weights_only=True)
-            # 加载 encoder 参数
-            # print(checkpoint['encoder'].keys())
-            # exit()
             self.net.model.load_state_dict(checkpoint['encoder'])
             self.net.head.load_state_dict(checkpoint['head'])
 
-            # **只冻结 `model` 部分，不冻结 `head`**
             for param in self.net.model.parameters():
                 param.requires_grad = False
-
-            # for param in self.net.model.bottleneck.parameters():
-            #     param.requires_grad = True
-
-            # print("Trainable parameters:")
-            # for name, param in self.net.named_parameters():
-            #     if param.requires_grad:
-            #         print(name)
 
 
 

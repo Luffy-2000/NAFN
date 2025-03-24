@@ -2,14 +2,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
-# 读取数据
+# Read data
 df = pd.read_parquet('/home/zhaozijian/fscil-nids-main/data/iot_nid/iot-nidd_100pkts_6f_clean.parquet')
 
-# 选择需要绘制的字段
+# Select fields to plot
 # fields = [col for col in df.columns if col.startswith('SCALED_')]
 fields = ['PL', 'IAT', 'DIR', 'WIN', 'FLG', 'TTL', 'LOAD']
 
-# 画出每个字段的频率分布图
+# Draw frequency distribution for each field
 for field in fields:
     plt.figure(figsize=(8, 4))
     sns.histplot(df[field].explode(), bins=50, kde=True)

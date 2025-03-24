@@ -34,10 +34,13 @@ class NetworkingDataset(Dataset):
         """Generates one sample of data"""
         x = self.images[index]
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         # if self.is_unsupervised:
         #     return x  # 无监督模式只返回数据
 >>>>>>> 13490ca (Fix: Unsupervised Learning)
+=======
+>>>>>>> 4afd533 (Fix: Modify Comments)
         y = self.labels[index]
         return x, y
     
@@ -64,6 +67,7 @@ class NetworkingDataset(Dataset):
         print(ci.data)
     
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False):
 =======
@@ -85,6 +89,8 @@ def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False
 #     def __getitem__(self, index):
 #         return self.dataset.get_unsupervised_item(index)
 
+=======
+>>>>>>> 4afd533 (Fix: Modify Comments)
 
 def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False, is_unsupervised=False):
 >>>>>>> 13490ca (Fix: Unsupervised Learning)
@@ -347,7 +353,7 @@ def split(
 
 
     if is_unsupervised:
-        # 将数据集转换为无监督模式
+        # Convert the dataset to unsupervised mode
         train_set.is_unsupervised = True
         val_set.is_unsupervised = True
         test_set.is_unsupervised = True

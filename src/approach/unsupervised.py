@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 class LightningUnsupervised(LightningModule):
-    """无监督学习的训练模块"""
+    """Training module for unsupervised learning"""
     # Optimizer parameters
     lr = 0.001
     inner_lr = 0.01
@@ -40,9 +40,9 @@ class LightningUnsupervised(LightningModule):
             raise ValueError('Unsupported lr strategy')
         
         self.net = net
-        self.is_unsupervised = True  # 添加无监督学习标志
+        self.is_unsupervised = True  # Add unsupervised learning flag
         self.save_hyperparameters()
-        # 损失函数
+
         self.criterion1 = nn.MSELoss()
         self.criterion2 = nn.CrossEntropyLoss()
         
@@ -51,10 +51,8 @@ class LightningUnsupervised(LightningModule):
     
 
     def training_step(self, batch, batch_idx):
-        x, y = batch  # 忽略标签
-        # 前向传播 - 自动添加噪声
+        x, y = batch  
         x_recon, logits = self(x)
-        # 计算重建损失 - 与原始输入比较
         recon_loss = self.criterion1(x_recon, x)
         ce_loss = self.criterion2(logits, y)
         loss = 0.9*recon_loss + 0.1*ce_loss
@@ -63,7 +61,6 @@ class LightningUnsupervised(LightningModule):
         
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        # 前向传播 - 自动添加噪声
         x_recon, logits = self(x)
         recon_loss = self.criterion1(x_recon, x)
         ce_loss = self.criterion2(logits, y)
@@ -73,7 +70,7 @@ class LightningUnsupervised(LightningModule):
         
 
     def training_epoch_end(self, _):
-        # 保存模型权重
+        # Save model weights
         saved_weights_path = f'{self.logger.log_dir}/pretrain_models'
         os.makedirs(saved_weights_path, exist_ok=True)
         checkpoint = {

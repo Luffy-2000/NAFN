@@ -1,10 +1,10 @@
 def get_padding(kernel, padding='same'):
-    """计算padding大小
+    """Calculate padding size
     Args:
-        kernel: 卷积核大小
-        padding: padding类型 ('same' 或 'valid')
+    kernel: convolution kernel size
+    padding: padding type ('same' or 'valid')
     Returns:
-        tuple: padding的大小 (左/上padding, 右/下padding)
+    tuple: padding size (left/top padding, right/bottom padding)
     """
     pad = kernel - 1
     if padding == 'same':
@@ -16,16 +16,16 @@ def get_padding(kernel, padding='same'):
 
 
 def get_output_dim(dimension, kernels, strides, dilatation=1, padding='same', return_paddings=False):
-    """计算卷积/池化后的输出维度
+    """Calculate the output dimension after convolution/pooling
     Args:
-        dimension: 输入维度
-        kernels: 卷积核尺寸列表
-        strides: 步长列表
-        dilatation: 膨胀系数
-        padding: padding类型 ('same' 或 'valid')
-        return_paddings: 是否返回padding值
+    dimension: input dimension
+    kernels: convolution kernel size list
+    strides: stride list
+    dilatation: dilation coefficient
+    padding: padding type ('same' or 'valid')
+    return_paddings: whether to return padding value
     Returns:
-        int 或 tuple: 输出维度，如果return_paddings为True则同时返回padding值
+    int or tuple: output dimension, if return_paddings is True, it also returns padding value
     """
     out_dim = dimension
     paddings = []

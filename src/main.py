@@ -128,13 +128,13 @@ def main():
         args.approach, net, **dict_args)
 =======
     if args.is_unsupervised:
-        # 使用自编码器进行无监督学习
+        # Unsupervised learning
         args.num_outputs =  ways[0]
         net = LLL_Net.factory_network(**vars(args))
         approach = LightningUnsupervised(net, **dict_args)
         
     else:
-        # 有监督学习
+        # Supervised learning
         args.num_outputs = ways[0] # 7
         
         net = LLL_Net.factory_network(**vars(args))
