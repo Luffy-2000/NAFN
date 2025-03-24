@@ -8,10 +8,6 @@ from approach.tl_module import LightningTLModule
 from modules.losses import DistillKLLoss
 from modules.teachers import Teacher
 from modules.classifiers import NN, LR
-<<<<<<< HEAD
-
-=======
->>>>>>> 13490ca (Fix: Unsupervised Learning)
 EPSILON = 1e-8
 
 
@@ -30,13 +26,9 @@ class LightningRFS(LightningTLModule):
         - gamma (float, optional): Weight for KL loss. Defaults to 0.5.
         - is_distill (bool, optional): Whether to use knowledge distillation. Defaults to False.
         - teacher_path (str, optional): Path to the teacher model. Defaults to None.
-<<<<<<< HEAD
-        - base_learner (str, optional): Type of base learner ('lr' or 'nn'). Defaults to 'lr'.
-=======
         - base_learner (str, optional): Type of base learner ('lr' or 'nn'). Defaults to 'nn'.
         - pretrained_autoencoder (str, optional): Path to pretrained autoencoder. Defaults to None.
         - skip_training (bool, optional): Whether to skip training when using nn classifier. Defaults to False.
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         - ``**kwargs`` (dict): Additional keyword arguments.
 
     Attributes:
@@ -51,10 +43,7 @@ class LightningRFS(LightningTLModule):
         - alpha (float): Weight for CE loss.
         - gamma (float): Weight for KL loss.
         - teacher (``src.modules.teacher.Teacher``): Teacher model instance.
-<<<<<<< HEAD
-=======
         - is_unsupervised (bool): Whether to run in unsupervised mode.
->>>>>>> 13490ca (Fix: Unsupervised Learning)
     """
     
     alpha = 0.5
@@ -63,11 +52,8 @@ class LightningRFS(LightningTLModule):
     kd_T = 1
     teacher_path = None
     base_learner = 'nn'
-<<<<<<< HEAD
-=======
     pretrained_autoencoder = None
     is_unsupervised = False
->>>>>>> 13490ca (Fix: Unsupervised Learning)
     
     def __init__(self, net, loss=None, **kwargs):
         super().__init__(**kwargs)
@@ -83,11 +69,6 @@ class LightningRFS(LightningTLModule):
         self.teacher_path = kwargs.get('teacher_path', LightningRFS.teacher_path)
         self.alpha = kwargs.get('alpha', LightningRFS.alpha) if self.is_distill else 0
         self.gamma = kwargs.get('gamma', LightningRFS.gamma) if self.is_distill else 1
-<<<<<<< HEAD
-        assert (
-            self.alpha + self.gamma == 1.0
-        ), 'alpha + gamma should be equal to 1'
-=======
         self.pretrained_autoencoder = kwargs.get('pretrained_autoencoder', LightningRFS.pretrained_autoencoder)
         self.is_unsupervised = kwargs.get('is_unsupervised', LightningRFS.is_unsupervised)
         
@@ -96,7 +77,7 @@ class LightningRFS(LightningTLModule):
         ), 'alpha + gamma should be equal to 1'
 
 
-        # If a pretrained autoencoder is specified, load its weights and freeze them
+        # If a pre-trained autoencoder is specified, load its weights and freeze
         if self.pretrained_autoencoder:
             print(f'Loading pretrained autoencoder from {self.pretrained_autoencoder}')
             checkpoint = torch.load(self.pretrained_autoencoder, weights_only=True)
@@ -107,8 +88,6 @@ class LightningRFS(LightningTLModule):
                 param.requires_grad = False
 
 
-
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         self.teacher = Teacher(
             net=self.net, 
             is_distill=self.is_distill, 
@@ -123,13 +102,9 @@ class LightningRFS(LightningTLModule):
             "gamma": self.gamma,
             "is_distill": self.is_distill,
             "teacher_path": self.teacher_path,
-<<<<<<< HEAD
-            "base_learner": self.base_learner
-=======
             "base_learner": self.base_learner,
             "pretrained_autoencoder": self.pretrained_autoencoder,
             "is_unsupervised": self.is_unsupervised
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         })
 
 
@@ -167,15 +142,12 @@ class LightningRFS(LightningTLModule):
             choices=['lr', 'nn'],
             default=LightningRFS.base_learner
         )
-<<<<<<< HEAD
-=======
         parser.add_argument(
             "--pretrained-autoencoder",
             type=str,
             default=LightningRFS.pretrained_autoencoder,
             help="Path to pretrained autoencoder model"
         )
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         return parser
     
     def on_adaptation_start(self):
@@ -187,15 +159,6 @@ class LightningRFS(LightningTLModule):
         os.makedirs(saved_weights_path, exist_ok=True)
         torch.save(self.net.state_dict(), 
                    f'{saved_weights_path}/teacher_ep{self.trainer.current_epoch}.pt')
-<<<<<<< HEAD
-           
-    def pt_step(self, batch, batch_idx, **kwargs):
-        data, labels = batch
-        
-        student_logits = self.net(data)
-        teacher_logits = self.teacher(data)
-        
-=======
     
 
     def pt_step(self, batch, batch_idx, **kwargs):
@@ -203,21 +166,13 @@ class LightningRFS(LightningTLModule):
         student_logits = self.net(data)
         teacher_logits = self.teacher(data)    # None
 
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         # CE on actual label and student logits
         gamma_loss = self.ce_loss(student_logits, labels) 
         # KL on teacher and student logits
         alpha_loss = self.kl_loss(student_logits, teacher_logits)
-<<<<<<< HEAD
-        
-        eval_accuracy = accuracy(student_logits, labels)
-        loss = gamma_loss * self.gamma + alpha_loss * self.alpha
-        
-=======
         eval_accuracy = accuracy(student_logits, labels)
         loss = gamma_loss * self.gamma + alpha_loss * self.alpha  # tensor(5.3006, device='cuda:0')
 
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         return {
             'loss': loss,
             'accuracy': eval_accuracy,
@@ -225,18 +180,10 @@ class LightningRFS(LightningTLModule):
             'logits': student_logits
         }
         
-<<<<<<< HEAD
-=======
-
->>>>>>> 13490ca (Fix: Unsupervised Learning)
     @torch.no_grad()
     def ft_step(self, batch):
         # Grad disabled since the backbone is frozen and a fully-connected head is not used
         self.net.eval()
-<<<<<<< HEAD
-        
-=======
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         data, labels = batch
         labels, le = self.label_encoding(labels)
 

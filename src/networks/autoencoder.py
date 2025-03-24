@@ -12,7 +12,6 @@ class Decoder(nn.Module):
         self.target_size = target_size  # (H, W)
         self.filters = filters
         
-        # 计算初始特征图大小
         self.initial_size = (target_size[0]//4, target_size[1]//2)  # Modify the initial width to 1/2 of the target
         
         self.layers = nn.ModuleList([

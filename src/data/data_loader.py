@@ -4,30 +4,15 @@ from learn2learn.data.transforms import NWays, KShots, LoadData, RemapLabels, Co
 from data import networking_dataset as netdat
 from data.dataset_config import dataset_config
 from data.datamodules import PLDataModule
-<<<<<<< HEAD
-=======
 # from data.networking_dataset import UnsupervisedNetworkingDataset
->>>>>>> 13490ca (Fix: Unsupervised Learning)
 
 
 def get_loaders(
     dataset, num_pkts, fields, queries, shots, num_tasks, 
-<<<<<<< HEAD
-    classes_per_set, shuffle_classes, is_fscil, seed
-):
-    
-    dc = dataset_config[dataset]
-    
-    ways, train_set, test_set, val_set, finetune_set = netdat.split(
-        dc, num_pkts, fields, classes_per_set, shuffle_classes, is_fscil, seed
-    )
-    
-=======
     classes_per_set, shuffle_classes, is_fscil, seed, is_unsupervised=False
 ):
     """
     Get data loaders for training.
-
     Parameters:
         - dataset (str): Dataset name
         - num_pkts (int): Number of packets
@@ -48,26 +33,20 @@ def get_loaders(
     )
 
     if is_unsupervised:
-        # Unsupervised pre-training uses training and validation sets
         unsupervised_datamodule = PLDataModule(
             train_set=train_set,
-            val_set=val_set,
-            test_set=test_set,  
-            batch_size=256,  
-            num_workers=4  
+            val_set=val_set,  
+            test_set=test_set, 
+            batch_size=256, 
+            num_workers=4 
         )
         return ways, unsupervised_datamodule, None
 
->>>>>>> 13490ca (Fix: Unsupervised Learning)
     pretrain_datamodule = PLDataModule(
         train_set=train_set,
         val_set=val_set,
         test_set=test_set,
     )
-<<<<<<< HEAD
-=======
-
->>>>>>> 13490ca (Fix: Unsupervised Learning)
     finetune_taskset = _get_taskset(
         dataset=finetune_set,
         ways=sum(ways) if is_fscil else ways[1],
