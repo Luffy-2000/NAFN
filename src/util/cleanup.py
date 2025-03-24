@@ -10,7 +10,7 @@ def cleanup_distill_models(path):
         f_norm = os.path.normpath(f)
         if os.path.exists(f_norm) and f_norm != os.path.normpath(f'{path}/distill_models/teacher_ep{ckpt_e}.pt'):
             os.remove(f_norm)
-            print(f_norm)
+            # print(f_norm)
             
 def cleanup_embeddings(path):
     if not os.path.isdir(f'{path}/adaptation_data/'):
