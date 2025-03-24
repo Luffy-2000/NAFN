@@ -11,12 +11,20 @@ import data.utility as util
 class NetworkingDataset(Dataset):
     """Characterizes a dataset for PyTorch -- this dataset pre-loads all biflows in memory"""
 
+<<<<<<< HEAD
     def __init__(self, data, class_indices=None):
+=======
+    def __init__(self, data, class_indices=None, is_unsupervised=False):
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
         """Initialization"""
         self.labels = data['y']
         self.images = data['x']
         self.seeds = data['s']
         self.class_indices = class_indices
+<<<<<<< HEAD
+=======
+        self.is_unsupervised = is_unsupervised
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 
     def __len__(self):
         """Denotes the total number of samples"""
@@ -25,6 +33,11 @@ class NetworkingDataset(Dataset):
     def __getitem__(self, index):
         """Generates one sample of data"""
         x = self.images[index]
+<<<<<<< HEAD
+=======
+        # if self.is_unsupervised:
+        #     return x  # 无监督模式只返回数据
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
         y = self.labels[index]
         return x, y
     
@@ -50,8 +63,31 @@ class NetworkingDataset(Dataset):
         ci.data['all_classes'] = [arr.tolist() for arr in self.labels.unique(return_counts=True)]
         print(ci.data)
     
+<<<<<<< HEAD
 
 def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False):
+=======
+#     def get_unsupervised_item(self, index):
+#         """Generates one sample of data for unsupervised training"""
+#         x = self.images[index]
+#         y = self.labels[index]
+#         return x, y
+
+
+# class UnsupervisedNetworkingDataset(Dataset):
+#     """用于无监督预训练的数据集类"""
+#     def __init__(self, dataset):
+#         self.dataset = dataset
+
+#     def __len__(self):
+#         return len(self.dataset)
+
+#     def __getitem__(self, index):
+#         return self.dataset.get_unsupervised_item(index)
+
+
+def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False, is_unsupervised=False):
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     """
     Generates a dataset from input features and labels based on the specified class set.
 
@@ -63,6 +99,11 @@ def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False
         - augs (``str``, optional): Augmentations to apply to the dataset. Defaults to '' (no aug).
         - return_xy (``bool``, optional): If True, returns input features and labels. 
           Defaults to False.
+<<<<<<< HEAD
+=======
+        - is_unsupervised (``bool``, optional): Whether to use unsupervised mode.
+          Defaults to False.
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 
     Returns:
         - NetworkingDataset or tuple: If `return_xy` is False, returns a NetworkingDataset object 
@@ -73,6 +114,10 @@ def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False
         class_set = torch.tensor([])
     
     class_mask = (y[:, None] == class_set[None, :]).any(dim=-1)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     if isinstance(x, list):
         x = [e for e, m in zip(x, class_mask) if m]
     else:
@@ -84,8 +129,14 @@ def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False
 
     indices = ([util._get_random_state(idx) for idx in indices[class_mask]]
                if indices is not None else [])
+<<<<<<< HEAD
     data = dict(zip(['x', 'y', 's'], [x, y, indices]))
     return NetworkingDataset(data)  
+=======
+
+    data = dict(zip(['x', 'y', 's'], [x, y, indices]))
+    return NetworkingDataset(data, is_unsupervised=is_unsupervised)
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 
 
 def _class_split(fs_split, classes_per_set=[], sets_number=3):
@@ -118,11 +169,19 @@ def _class_split(fs_split, classes_per_set=[], sets_number=3):
             'tst' : test_classes
         }
     else:    
+<<<<<<< HEAD
                 
         classes = np.concatenate([fs_split[f'{k}_classes'] for k in ['train', 'val', 'test']])
         class_sets = []
         class_index = 0
         
+=======
+        classes = np.concatenate([fs_split[f'{k}_classes'] for k in ['train', 'val', 'test']])
+
+        class_sets = []
+        class_index = 0
+
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
         assert sum(classes_per_set) <= len(classes), (
             f'Classes per set ({sum(classes_per_set)}) exceed '
             f'the total available ({len(classes)})'
@@ -135,7 +194,11 @@ def _class_split(fs_split, classes_per_set=[], sets_number=3):
                 class_index += 1
                 
             class_sets.append(torch.tensor(class_set)) 
+<<<<<<< HEAD
         
+=======
+
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
         return {
             'trn' : util._safe_get(class_sets, 0, None), 
             'val' : util._safe_get(class_sets, 1, None) if len(classes_per_set) == 3 else None, 
@@ -199,7 +262,11 @@ def _hold_out(x, y, seed, enc=True):
 
 
 def split(
+<<<<<<< HEAD
     dc, num_pkts=None, fields=None, classes_per_set=[], shuffle_classes=False, is_fscil=False, seed=0
+=======
+    dc, num_pkts=None, fields=None, classes_per_set=[], shuffle_classes=False, is_fscil=False, seed=0, is_unsupervised=False
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 ):
     """
     Splits the dataset into pre-training (train, val and test) and fine-tuning set sets 
@@ -214,6 +281,10 @@ def split(
         - classes_per_set (``list`` of ``int``, optional): A list specifying the number of classes 
           per set. It should contain 0 or 2 elements. Defaults to [].
         - seed (``int``, optional): The random seed for dataset splitting. Defaults to 0.
+<<<<<<< HEAD
+=======
+        - is_unsupervised (``bool``, optional): Whether to use unsupervised pre-training. Defaults to False.
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 
     Returns:
         ``tuple``: A tuple containing:
@@ -228,14 +299,21 @@ def split(
         'NetworkingDataset requires the definition of num_pkts and fields, or both.'
     )
     assert len(classes_per_set) in [0, 2], (
+<<<<<<< HEAD
         'It is not possible to split the dataset in more or less than 2 sets'
     )
 
+=======
+        'classes_per_set must be empty or contain 2 elements.'
+    )
+    
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     full_path = dc['path']
     label_column = dc.get('label_column', 'LABEL')
     fs_split = util._shuffle_dict_classes(dc['fs_split']) if shuffle_classes else dc['fs_split']
     
     x, y, _ = util._get_x_y(full_path, num_pkts, fields, label_column, seed)
+<<<<<<< HEAD
 
     classes = _class_split(fs_split, classes_per_set, sets_number=2)
     
@@ -254,3 +332,48 @@ def split(
         finetune_set.merge(test_set_t1)
         
     return [pt_ways, ft_ways], train_set, test_set, val_set, finetune_set
+=======
+    
+    # Split classes
+    class_sets = _class_split(fs_split, classes_per_set)
+    
+    # Split data for pre-training (both supervised and unsupervised use training classes)
+    x_pt, y_pt = _dataset_from_labels(x, y, class_sets['trn'], return_xy=True)
+
+    train_set, val_set, test_set = _balanced_hold_out(x_pt, y_pt, seed, enc=True)
+    
+    # Get ways
+    ways = [len(class_sets['trn']), len(class_sets['tst'])]
+
+
+    if is_unsupervised:
+        # 将数据集转换为无监督模式
+        train_set.is_unsupervised = True
+        val_set.is_unsupervised = True
+        test_set.is_unsupervised = True
+        return ways, train_set, test_set, val_set, None
+    
+
+    # Create finetune set if needed
+    if is_fscil:
+        test_set_t1 = _dataset_from_labels(x, y, class_sets['tst'])
+        finetune_set = copy.deepcopy(test_set)
+        finetune_set.merge(test_set_t1)
+    else:
+        finetune_set = None
+    
+   
+    return ways, train_set, test_set, val_set, finetune_set
+
+
+
+    # # Split data
+    # train_set = _dataset_from_labels(x, y, class_sets['trn'], is_unsupervised=is_unsupervised)
+    # val_set = _dataset_from_labels(x, y, class_sets['val'], is_unsupervised=is_unsupervised)
+    # test_set = _dataset_from_labels(x, y, class_sets['tst'], is_unsupervised=is_unsupervised)
+    
+    # # Get ways
+    # ways = [len(class_sets['trn']), len(class_sets['tst'])]
+    
+    # return ways, train_set, test_set, val_set, None
+>>>>>>> 13490ca (Fix: Unsupervised Learning)

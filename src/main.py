@@ -9,7 +9,12 @@ from networks.network import LLL_Net
 from trainers.trainer import TLTrainer
 from approach import (
     LightningRFS,
+<<<<<<< HEAD
     LightningTLModule
+=======
+    LightningTLModule,
+    LightningUnsupervised
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 )
 
 
@@ -34,6 +39,10 @@ def main():
     parser.add_argument('--shuffle-classes', action='store_true', default=False)
     # Exp args
     parser.add_argument('--is-fscil', action='store_true', default=False)
+<<<<<<< HEAD
+=======
+    parser.add_argument('--is-unsupervised', action='store_true', default=False)
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     parser.add_argument(
         '--fields', type=str, default=[], 
         choices=['PL', 'IAT', 'DIR', 'WIN', 'FLG', 'TTL'],
@@ -49,6 +58,11 @@ def main():
         help='Scaling factor to modify the number of trainable '
         'parameters used by model (default=%(default)s)'
     )
+<<<<<<< HEAD
+=======
+    # Unsupervised learning args
+    parser.add_argument('--learning-rate', type=float, default=1e-3)
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     args = parser.parse_args()
     dict_args = vars(args)
     
@@ -56,8 +70,13 @@ def main():
         not (args.pt_only and args.ft_only) 
     ), '--pt-only and --ft-only cannot be both True'
     
+<<<<<<< HEAD
     dict_args_copy = deepcopy(dict_args)  # Used to store the initial args before the training procedure
     dict_args_copy.pop('tpu_cores')  # Removing the tpu_cores entry that should not be saved
+=======
+    dict_args_copy = deepcopy(dict_args)
+    dict_args_copy.pop('tpu_cores')
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 
     try:
         dict_args['device'] = 'cuda' if args.gpus > 0 else 'cpu'
@@ -68,7 +87,11 @@ def main():
     ## 1 - GET LOADERS
     ####  
     rng.seed_everything(args.seed)
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     ways, pretrain_datamodule, finetune_taskset = get_loaders(
         dataset=args.dataset,
         num_pkts=args.num_pkts, 
@@ -80,11 +103,20 @@ def main():
         shuffle_classes=args.shuffle_classes,
         is_fscil=args.is_fscil,
         num_tasks=args.num_tasks,
+<<<<<<< HEAD
     )
+=======
+        is_unsupervised=args.is_unsupervised,
+    )
+    # ways [7, 3]
+    # pretrain_datamodule <data.datamodules.PLDataModule object at 0x7ff376c780d0>
+    # finetune_taskset <learn2learn.data.task_dataset.TaskDataset object at 0x7ff376ad0e80>
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 
     ####
     ## 2 - GET MODEL AND APPROACH
     ####
+<<<<<<< HEAD
     args.num_outputs = ways[0]
     net = LLL_Net.factory_network(**vars(args))
     print(net)
@@ -94,10 +126,26 @@ def main():
         
     approach = LightningTLModule.factory_approach(
         args.approach, net, **dict_args)
+=======
+    if args.is_unsupervised:
+        # 使用自编码器进行无监督学习
+        args.num_outputs =  ways[0]
+        net = LLL_Net.factory_network(**vars(args))
+        approach = LightningUnsupervised(net, **dict_args)
+        
+    else:
+        # 有监督学习
+        args.num_outputs = ways[0] # 7
+        
+        net = LLL_Net.factory_network(**vars(args))
+        approach = LightningTLModule.factory_approach(
+            args.approach, net, **dict_args)
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
 
     ####
     ## 3 - TRAIN AND TEST
     ####   
+<<<<<<< HEAD
     args.callbacks = [] # Add custom callbacks here 
     tl_trainer = TLTrainer(args, dict_args_copy)
     
@@ -115,6 +163,29 @@ def main():
     if not args.pt_only or args.ft_only:
         ft_res = tl_trainer.adaptation(approach=approach, dataloader=finetune_taskset) 
         eval_res = {**eval_res, **ft_res}
+=======
+    args.callbacks = []
+    tl_trainer = TLTrainer(args, dict_args_copy)
+
+    # Pre-training
+    eval_res = {}
+    if args.pt_only or not args.ft_only:
+        if args.is_unsupervised:
+            tl_trainer.fit(approach=approach, datamodule=pretrain_datamodule)
+        else:
+            # Set finetuning dataset in the trainer
+            tl_trainer.set_finetune_taskset(finetune_taskset)
+            # Pre-Training fit
+            tl_trainer.fit(approach=approach, datamodule=pretrain_datamodule) 
+            # Pre-Training test
+            eval_res = tl_trainer.test()[0]
+
+    # Adaptation
+    if not args.pt_only or args.ft_only:
+        if not args.is_unsupervised:
+            ft_res = tl_trainer.adaptation(approach=approach, dataloader=finetune_taskset)
+            eval_res = {**eval_res, **ft_res}
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     tl_trainer.save_results(eval_res)
 
 

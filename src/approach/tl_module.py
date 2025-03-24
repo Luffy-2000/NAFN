@@ -59,7 +59,12 @@ class LightningTLModule(LightningModule):
         # Other
         self._device = kwargs.get('device', 'cpu')
         self.is_fscil = kwargs.get('is_fscil', False)
+<<<<<<< HEAD
         
+=======
+
+
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     @staticmethod
     def factory_approach(approach_name, net, **kwargs):
         Approach = getattr(importlib.import_module(

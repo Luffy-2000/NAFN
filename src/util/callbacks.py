@@ -124,6 +124,10 @@ class EarlyStoppingDoubleMetric(EarlyStopping):
         loss_current = logs.get('valid_loss')
         acc_current = logs.get('valid_accuracy')
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
         if not isinstance(loss_current, torch.Tensor) and not isinstance(acc_current, torch.Tensor):
             loss_current = torch.tensor(loss_current, device=pl_module.device)
             acc_current = torch.tensor(acc_current, device=pl_module.device)
@@ -173,7 +177,10 @@ class EarlyStoppingDoubleMetric(EarlyStopping):
         
         
 class LearningRateMonitorOnLog(LearningRateMonitor):
+<<<<<<< HEAD
     
+=======
+>>>>>>> 13490ca (Fix: Unsupervised Learning)
     def on_batch_start(self, trainer, pl_module):
         # Override
         if self.logging_interval != 'epoch':
