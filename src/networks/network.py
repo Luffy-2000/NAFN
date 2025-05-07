@@ -2,19 +2,6 @@ import importlib
 import torch
 from torch import nn
 from copy import deepcopy
-<<<<<<< HEAD
-
-
-class LLL_Net(nn.Module):
-    """Basic class for implementing networks"""
-
-    def __init__(self, model, activate_features=True, weights_path=None):
-        super().__init__()
-
-        self.model = model
-        self.is_bayesian = hasattr(self.model, 'is_bayesian')
-
-=======
 from networks.autoencoder import Autoencoder
 from networks.UNet import UNet
 from networks.UNet1D2D import UNet1D2D
@@ -26,7 +13,6 @@ class LLL_Net(nn.Module):
         self.model = model
         self.is_unsupervised = getattr(self.model, 'is_unsupervised', False)
         self.is_bayesian = hasattr(self.model, 'is_bayesian')
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         if activate_features:
             self.feat_activation = nn.functional.relu
         else:
@@ -35,6 +21,7 @@ class LLL_Net(nn.Module):
         self.head = None
         self.initialize_weights(weights_path)
 
+
     @staticmethod
     def factory_network(**kwargs):
         model = getattr(importlib.import_module(name='networks'), kwargs['network'])
@@ -42,27 +29,6 @@ class LLL_Net(nn.Module):
             num_pkts=kwargs['num_pkts'],
             num_fields=len(kwargs['fields']),
             out_features_size=kwargs['out_features_size'],
-<<<<<<< HEAD
-            scale=kwargs['scale']
-        )
-        net = LLL_Net(init_model)
-        net.add_head(num_outputs=kwargs['num_outputs'])
-        return net      
-    
-    def add_head(self, num_outputs):
-        self.head = nn.Linear(self.model.out_features_size, num_outputs)
-
-    def forward(self, x, return_features=False):
-        """Applies the forward pass
-        
-            x (tensor): input images
-            return_features (bool): return the representations before the heads
-        """
-        x = self.model.extract_features(x) 
-        y = self.feat_activation(x)
-           
-        return (y, x) if return_features else y
-=======
             scale=kwargs['scale'],
         )
         setattr(init_model, "is_unsupervised", kwargs.get("is_unsupervised", False))
@@ -82,19 +48,18 @@ class LLL_Net(nn.Module):
             x (tensor): input images
             return_features (bool): return the representations before the heads
         """
-        # If it is an autoencoder, use its forward method directly
+        # 如果是自编码器，直接使用其forward方法
         if self.is_unsupervised:
             recon_x, logits = self.model(x)
             y = self.head(logits)
             y = self.feat_activation(y)
-            return recon_x, y
+            return recon_x, logits, y
         else:
             x = self.model.extract_features(x)
             x = self.head(x)
             y = self.feat_activation(x)
             return (y, x) if return_features else y
 
->>>>>>> 13490ca (Fix: Unsupervised Learning)
 
     def get_copy(self):
         """Get weights from the model"""
@@ -146,6 +111,7 @@ class LLL_Net(nn.Module):
             for param in self.head.parameters():
                 param.requires_grad = False
 
+
     def initialize_weights(self, path, **kwargs):
         """Initialize weights using different strategies"""
         if path is None:
@@ -155,36 +121,3 @@ class LLL_Net(nn.Module):
             
         self.load_state_dict(state_dict)
         print(f'Model loaded from {path}')
-<<<<<<< HEAD
-        
-
-def get_padding(kernel, padding='same'):
-    # http://d2l.ai/chapter_convolutional-neural-networks/padding-and-strides.html
-    pad = kernel - 1
-    if padding == 'same':
-        if kernel % 2:
-            return pad // 2, pad // 2
-        else:
-            return pad // 2, pad // 2 + 1
-    return 0, 0
-
-
-def get_output_dim(dimension, kernels, strides, dilatation=1, padding='same', return_paddings=False):
-    # http://d2l.ai/chapter_convolutional-neural-networks/padding-and-strides.html
-    out_dim = dimension
-    paddings = []
-    if padding == 'same':
-        for kernel, stride in zip(kernels, strides):
-            paddings.append(get_padding(kernel, padding))
-            out_dim = (out_dim + stride - 1) // stride
-    else:
-        for kernel, stride in zip(kernels, strides):
-            paddings.append(get_padding(kernel, padding))
-            out_dim = (out_dim - kernel + stride) // stride
-
-    if return_paddings:
-        return out_dim, paddings
-    return out_dim
-=======
-
->>>>>>> 13490ca (Fix: Unsupervised Learning)

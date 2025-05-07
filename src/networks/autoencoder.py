@@ -104,3 +104,5 @@ class Autoencoder(nn.Module):
     def extract_features(self, x):
         """Extract features for downstream tasks"""
         return self.encoder.extract_features(x)
+
+

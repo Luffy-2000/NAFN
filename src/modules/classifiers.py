@@ -5,12 +5,8 @@ from torch import nn
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 
-<<<<<<< HEAD
-    
-=======
 
 
->>>>>>> 13490ca (Fix: Unsupervised Learning)
 def NN(x_support, y_support, x_query):
     """ Classify queries with a nearest-neighbour head """
     device = torch.device("cuda:0" if x_query.is_cuda else "cpu")

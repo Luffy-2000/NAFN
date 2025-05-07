@@ -6,10 +6,6 @@ import pandas as pd
 import socket, struct
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-<<<<<<< HEAD
-
-=======
->>>>>>> 13490ca (Fix: Unsupervised Learning)
 from data.dataset_config import ClassInfo
 
 
@@ -44,21 +40,12 @@ def _get_x_y(full_path, num_pkts, fields, label_column, seed, is_ml=False):
     
     if not os.path.exists(prep_df_path):
         # First time reading the dataset
-<<<<<<< HEAD
-        from sklearn.preprocessing import MinMaxScaler
-
-        print('Processing dataframe...')
-        # Read parquet
-        df = pd.read_parquet(full_path)
-
-=======
         from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
         print('Processing dataframe...')
         
         # Read parquet
         df = pd.read_parquet(full_path)
         
->>>>>>> 13490ca (Fix: Unsupervised Learning)
         if 'ENC_LABEL' not in df:
             # Label encoding
             le = LabelEncoder()
@@ -72,11 +59,10 @@ def _get_x_y(full_path, num_pkts, fields, label_column, seed, is_ml=False):
         all_fields = ['PL', 'IAT', 'DIR', 'WIN', 'FLG', 'TTL', 'LOAD']
         existing_fields = [field for field in all_fields if field in df.columns]
         has_pad_col = 'FEAT_PAD' in df or 'LOAD_PAD' in df
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 13490ca (Fix: Unsupervised Learning)
+
+
+
         for field in existing_fields:
             mms = MinMaxScaler((0, 1))
             if has_pad_col:
@@ -95,10 +81,7 @@ def _get_x_y(full_path, num_pkts, fields, label_column, seed, is_ml=False):
         print('WARNING: using pre-processed dataframe.')
         df = pd.read_parquet(prep_df_path)  # , engine='fastparquet')
 
-<<<<<<< HEAD
-=======
 
->>>>>>> 13490ca (Fix: Unsupervised Learning)
     #  Get x and y
     columns = ['SCALED_%s' % field for field in fields]
     x = np.array([np.expand_dims(

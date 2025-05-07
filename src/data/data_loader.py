@@ -37,8 +37,6 @@ def get_loaders(
             train_set=train_set,
             val_set=val_set,  
             test_set=test_set, 
-            batch_size=256, 
-            num_workers=4 
         )
         return ways, unsupervised_datamodule, None
 

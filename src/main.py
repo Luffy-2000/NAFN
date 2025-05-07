@@ -53,6 +53,19 @@ def main():
     )
     # Unsupervised learning args
     parser.add_argument('--learning-rate', type=float, default=1e-3)
+    # 对比学习参数
+    parser.add_argument('--pre-mode', type=str, default='recon', choices=['recon', 'contrastive', 'hybrid'],
+                        help='Unsupervised learning mode: reconstruction, contrastive learning, or hybrid')
+    parser.add_argument('--temperature', type=float, default=0.5, 
+                        help='Temperature parameter for contrastive loss')
+    parser.add_argument('--transform-strength', type=float, default=0.8,
+                        help='Strength of data augmentation transformations (0-1)')
+    parser.add_argument('--recon-weight', type=float, default=0.5,
+                        help='Weight for reconstruction loss')
+    parser.add_argument('--ce-weight', type=float, default=0.5,
+                        help='Weight for cross-entropy loss')
+    parser.add_argument('--contrastive-weight', type=float, default=0.5,
+                        help='Weight for contrastive loss')
     args = parser.parse_args()
     dict_args = vars(args)
     

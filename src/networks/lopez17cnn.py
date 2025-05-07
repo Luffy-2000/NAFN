@@ -2,12 +2,7 @@ import math
 import torch
 import torch.nn.functional as F
 from torch import nn
-<<<<<<< HEAD
-
-from networks.network import get_output_dim
-=======
 from networks.utils import get_output_dim
->>>>>>> 13490ca (Fix: Unsupervised Learning)
 
 
 class Lopez17CNN(nn.Module):
@@ -56,17 +51,11 @@ class Lopez17CNN(nn.Module):
         self.bn2 = nn.BatchNorm2d(filters[1])
         self.fc1 = nn.Linear(features_size0 * features_size1 * filters[1], self.out_features_size)
         
-<<<<<<< HEAD
-    def forward(self, x):
-        return F.relu(self.extract_features(x))   
-
-=======
 
     def forward(self, x):
         return F.relu(self.extract_features(x))   
 
 
->>>>>>> 13490ca (Fix: Unsupervised Learning)
     def extract_features(self, x):
         out = F.pad(x, self.paddings1[0] + self.paddings0[0])
         out = F.relu(self.conv1(out))
