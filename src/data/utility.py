@@ -61,8 +61,6 @@ def _get_x_y(full_path, num_pkts, fields, label_column, seed, is_ml=False):
         has_pad_col = 'FEAT_PAD' in df or 'LOAD_PAD' in df
 
 
-
-
         for field in existing_fields:
             mms = MinMaxScaler((0, 1))
             if has_pad_col:
@@ -90,7 +88,6 @@ def _get_x_y(full_path, num_pkts, fields, label_column, seed, is_ml=False):
 
     y = [label for label in df['ENC_LABEL']]
     y = torch.tensor(y)
-
     if is_ml:
         return _flatten(x), y
     else:

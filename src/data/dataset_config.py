@@ -38,5 +38,16 @@ dataset_config = {
             'test_classes': [7, 4, 11]
         },
         'label_column': 'LABEL_FULL', 
+    },
+    'edge_iiot': {  
+        'path': join(_BASE_DATA_PATH, 'edge_iiot',
+                     'edge-iiot_100pkts_6f_1p-mt100k_benign_class_clean.parquet'),
+        'class_order': [1, 8, 5, 3, 2, 4, 9, 12, 11, 13, 14, 0, 10, 7, 6],  
+        'fs_split': {  
+            'train_classes': [1, 8, 5, 3, 2, 4, 9, 12, 11], 
+            'val_classes': [13, 14, 0],
+            'test_classes': [10, 7, 6]
+        },
     }
+
 }
