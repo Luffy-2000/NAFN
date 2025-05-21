@@ -272,10 +272,6 @@ class LightningUnsupervised(LightningModule):
             # Classification loss
             ce_loss = self.criterion_classify(logits, y)
             
-            # print("recon_loss:{}".format(recon_loss.item()))
-            # print("contrastive_loss:{}".format(contrastive_loss.item()))
-            # print("ce_loss:{}".format(ce_loss.item()))
-
             # Combine losses
             loss = (self.recon_weight * recon_loss + 
                    self.contrastive_weight * contrastive_loss + 

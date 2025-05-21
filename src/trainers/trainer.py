@@ -185,6 +185,7 @@ class TLTrainer:
             folders=['adaptation_data', 'pt_test_data'],
             wanted_metrics=['f1_all_macro']
         )
+        
         util.logger.plot_confusion_matrix(exp_path=self.trainers[trainer_idx].logger.log_dir)
         with open(f'{self.trainers[trainer_idx].logger.log_dir}/test_results.json', 'w') as f:
             json.dump({**eval_res, **f1_scores}, f)

@@ -1,0 +1,1 @@
+{'0,Normal,Normal,Normal': 0, '1,Bot,Bot,Bot': 1, '1,BruteForce,SSH,SSH': 2, '1,BruteForce,Web,Web': 3, '1,BruteForce,XSS,XSS': 4, '1,DDoS,HOIC,HOIC': 5, '1,DDoS,LOIC,HTTP': 6, '1,DDoS,LOIC,UDP': 7, '1,DoS,GoldenEye,GoldenEye': 8, '1,DoS,Hulk,Hulk': 9, '1,DoS,Slowloris,Slowloris': 10, '1,SQLInjection,SQLInjection,SQLInjection': 11}
