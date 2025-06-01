@@ -35,7 +35,6 @@ def main():
     parser.add_argument('--shuffle-classes', action='store_true', default=False)
     # Exp args
     parser.add_argument('--is-fscil', action='store_true', default=False)
-    parser.add_argument('--is-unsupervised', action='store_true', default=False)
     parser.add_argument(
         '--fields', type=str, default=[], 
         choices=['PL', 'IAT', 'DIR', 'WIN', 'FLG', 'TTL'],
@@ -51,11 +50,10 @@ def main():
         help='Scaling factor to modify the number of trainable '
         'parameters used by model (default=%(default)s)'
     )
-    # Unsupervised learning args
+    # Teacher model learning args
     parser.add_argument('--learning-rate', type=float, default=1e-3)
-    # 对比学习参数
-    parser.add_argument('--pre-mode', type=str, default='recon', choices=['recon', 'contrastive', 'hybrid'],
-                        help='Unsupervised learning mode: reconstruction, contrastive learning, or hybrid')
+    parser.add_argument('--pre-mode', type=str, default='none', choices=['recon', 'contrastive', 'hybrid', 'none'],
+                        help='Teacher model learning mode: reconstruction, contrastive learning, hybrid, or none')
     parser.add_argument('--temperature', type=float, default=0.5, 
                         help='Temperature parameter for contrastive loss')
     parser.add_argument('--transform-strength', type=float, default=0.8,
@@ -95,8 +93,7 @@ def main():
         shots=args.shots, 
         shuffle_classes=args.shuffle_classes,
         is_fscil=args.is_fscil,
-        num_tasks=args.num_tasks,
-        is_unsupervised=args.is_unsupervised,
+        num_tasks=args.num_tasks
     )
     # ways [7, 3]
     # pretrain_datamodule <data.datamodules.PLDataModule object at 0x7ff376c780d0>
@@ -105,19 +102,30 @@ def main():
     ####
     ## 2 - GET MODEL AND APPROACH
     ####
-    if args.is_unsupervised:
-        # Unsupervised learning
-        args.num_outputs =  ways[0]
-        net = LLL_Net.factory_network(**vars(args))
-        approach = LightningUnsupervised(net, **dict_args)
+    args.num_outputs = ways[0]
+    net = LLL_Net.factory_network(**vars(args))
+    print(net)
+    
+    if args.patience == -1:
+        args.patience = float('inf')
         
-    else:
-        # Supervised learning
-        args.num_outputs = ways[0] # 7
+    approach = LightningTLModule.factory_approach(
+        args.approach, net, **dict_args)
+    
+    
+    # if args.is_unsupervised:
+    #     # Unsupervised learning
+    #     args.num_outputs =  ways[0]
+    #     net = LLL_Net.factory_network(**vars(args))
+    #     approach = LightningUnsupervised(net, **dict_args)
         
-        net = LLL_Net.factory_network(**vars(args))
-        approach = LightningTLModule.factory_approach(
-            args.approach, net, **dict_args)
+    # else:
+    #     # Supervised learning
+    #     args.num_outputs = ways[0] # 7
+        
+    #     net = LLL_Net.factory_network(**vars(args))
+    #     approach = LightningTLModule.factory_approach(
+    #         args.approach, net, **dict_args)
 
     ####
     ## 3 - TRAIN AND TEST
@@ -128,20 +136,22 @@ def main():
     # Pre-training
     eval_res = {}
     if args.pt_only or not args.ft_only:
-        if args.is_unsupervised:
-            tl_trainer.fit(approach=approach, datamodule=pretrain_datamodule)
-        else:
-            # Set finetuning dataset in the trainer
-            tl_trainer.set_finetune_taskset(finetune_taskset)
-            # Pre-Training fit
-            tl_trainer.fit(approach=approach, datamodule=pretrain_datamodule) 
-            # Pre-Training test
-            eval_res = tl_trainer.test()[0]
+        # if args.is_unsupervised:
+        #     tl_trainer.fit(approach=approach, datamodule=pretrain_datamodule)
+        # else:
+        # Set finetuning dataset in the trainer
+        tl_trainer.set_finetune_taskset(finetune_taskset)
+        # Pre-Training fit
+        tl_trainer.fit(approach=approach, datamodule=pretrain_datamodule) 
+        # Pre-Training test
+        eval_res = tl_trainer.test()[0]
+
 
     # Adaptation
     if not args.pt_only or args.ft_only:
-        if not args.is_unsupervised:
+        # if not args.is_unsupervised:
             ft_res = tl_trainer.adaptation(approach=approach, dataloader=finetune_taskset)
+            # print(f"ft_res: {ft_res}")
             eval_res = {**eval_res, **ft_res}
     tl_trainer.save_results(eval_res)
 

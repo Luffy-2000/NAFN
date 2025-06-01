@@ -11,7 +11,6 @@ class LLL_Net(nn.Module):
     def __init__(self, model, activate_features=True, weights_path=None):
         super().__init__()
         self.model = model
-        self.is_unsupervised = getattr(self.model, 'is_unsupervised', False)
         self.is_bayesian = hasattr(self.model, 'is_bayesian')
         if activate_features:
             self.feat_activation = nn.functional.relu
@@ -31,35 +30,21 @@ class LLL_Net(nn.Module):
             out_features_size=kwargs['out_features_size'],
             scale=kwargs['scale'],
         )
-        setattr(init_model, "is_unsupervised", kwargs.get("is_unsupervised", False))
-        # setattr(init_model, "out_features_size", kwargs['num_pkts'] * len(kwargs['fields']))
         net = LLL_Net(init_model)
         net.add_head(num_outputs=kwargs['num_outputs'])
         return net
     
     def add_head(self, num_outputs):
-        self.head = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(self.model.out_features_size, num_outputs),
-        )
+        self.head = nn.Linear(self.model.out_features_size, num_outputs)
 
     def forward(self, x, return_features=False):
         """Applies the forward pass
             x (tensor): input images
             return_features (bool): return the representations before the heads
         """
-        # 如果是自编码器，直接使用其forward方法
-        if self.is_unsupervised:
-            recon_x, logits = self.model(x)
-            y = self.head(logits)
-            y = self.feat_activation(y)
-            return recon_x, logits, y
-        else:
-            x = self.model.extract_features(x)
-            x = self.head(x)
-            y = self.feat_activation(x)
-            return (y, x) if return_features else y
-
+        recon_x, fea = self.model(x)
+        y = self.feat_activation(fea)
+        return (y, fea, recon_x) if return_features else y
 
     def get_copy(self):
         """Get weights from the model"""

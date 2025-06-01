@@ -9,7 +9,7 @@ from data.datamodules import PLDataModule
 
 def get_loaders(
     dataset, num_pkts, fields, queries, shots, num_tasks, 
-    classes_per_set, shuffle_classes, is_fscil, seed, is_unsupervised=False
+    classes_per_set, shuffle_classes, is_fscil, seed
 ):
     """
     Get data loaders for training.
@@ -24,21 +24,20 @@ def get_loaders(
         - shuffle_classes (bool): Whether to shuffle classes
         - is_fscil (bool): Whether to use FSCIL
         - seed (int): Random seed
-        - is_unsupervised (bool): Whether to use unsupervised pre-training
     """
     dc = dataset_config[dataset]
     
     ways, train_set, test_set, val_set, finetune_set = netdat.split(
-        dc, num_pkts, fields, classes_per_set, shuffle_classes, is_fscil, seed, is_unsupervised
+        dc, num_pkts, fields, classes_per_set, shuffle_classes, is_fscil, seed
     )
 
-    if is_unsupervised:
-        unsupervised_datamodule = PLDataModule(
-            train_set=train_set,
-            val_set=val_set,  
-            test_set=test_set, 
-        )
-        return ways, unsupervised_datamodule, None
+    # if is_unsupervised:
+    #     unsupervised_datamodule = PLDataModule(
+    #         train_set=train_set,
+    #         val_set=val_set,  
+    #         test_set=test_set, 
+    #     )
+    #     return ways, unsupervised_datamodule, None
 
     pretrain_datamodule = PLDataModule(
         train_set=train_set,

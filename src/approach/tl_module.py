@@ -65,7 +65,8 @@ class LightningTLModule(LightningModule):
         Approach = getattr(importlib.import_module(
                 name=f'approach.{approach_name}'), appr_module[approach_name])
         
-        ckpt_path = kwargs.get('ckpt_path', None)
+        ckpt_path = kwargs.get('ckpt_path', None) #None
+
         if ckpt_path is None:
             # Create a new approach
             return Approach(net=net, **kwargs)
@@ -138,7 +139,8 @@ class LightningTLModule(LightningModule):
         )
         return outputs['loss']
     
-    def validation_step(self, batch, batch_idx):
+    def validation_step
+    (self, batch, batch_idx):
         outputs = self.pt_step(batch, batch_idx)
         
         self.log(
@@ -161,7 +163,7 @@ class LightningTLModule(LightningModule):
     
     def test_step(self, batch, batch_idx):
         outputs = self.pt_step(batch, batch_idx)
-
+        # print(outputs)
         self.log(
             'pt_test_loss',
             outputs['loss'].item(),

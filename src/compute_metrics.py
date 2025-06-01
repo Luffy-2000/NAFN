@@ -15,7 +15,7 @@ import util.logger
 default_metrics = [ 'acc', 'sc', 'db', 'f1_all_macro', 'f1_all_micro']
 fscil_metric = ['f1_new_macro', 'f1_new_micro', 'f1_old_macro', 'f1_old_micro']
 exp_args = [
-    'shots', 'queries', 'network', 'fields', 'num_pkts', 'seed', 'dataset'
+    'shots', 'queries', 'pre_mode','network', 'fields', 'num_pkts', 'seed', 'dataset'
 ]
 
 def compute_train_time(path):
@@ -44,48 +44,76 @@ def get_metric_dataframe(exp_path):
     
     # Get exp args
     for args_path in tqdm(Path(exp_path).rglob('dict_args.json'), desc='Generating parquet'):
-        data = dict()
-        with open(args_path) as f:
-            dict_args = json.load(f)
-            
-        for exp_arg in exp_args:
-            data[exp_arg] = dict_args[exp_arg]
-        is_fscil = dict_args['is_fscil']
-                        
-        path = str(args_path).replace('dict_args.json', '')
-        
-        match = re.search(r'_al_cycle_(\d+)', path)
-        data['curr_al_cycle']  = match.group(1) if match else np.nan
-        
-        
-        if is_fscil:
-            with open(f'{path}classes_info.json') as f:
-                classes_info = json.load(f)
+        try:
+            data = dict()
+            with open(args_path) as f:
+                dict_args = json.load(f)
                 
-            data['old_classes'] = [int(k) for k in classes_info['old_classes'].keys()]
-            data['new_classes'] = [int(k) for k in classes_info['new_classes'].keys()]
-            class_pool = dict()
-            class_pool['new'] = classes_info['all_classes'][0][len(data['old_classes']):]
-            class_pool['old'] = classes_info['all_classes'][0][:len(data['old_classes'])]
-            class_pool['all'] = None
+            # 提取版本号
+            version_match = re.search(r'version_(\d+)', str(args_path))
+            if version_match:
+                data['version'] = int(version_match.group(1))
+            else:
+                data['version'] = np.nan
+                
+            for exp_arg in exp_args:
+                data[exp_arg] = dict_args[exp_arg]
+            is_fscil = dict_args['is_fscil']
+                            
+            path = str(args_path).replace('dict_args.json', '')
+            
+            match = re.search(r'_al_cycle_(\d+)', path)
+            data['curr_al_cycle']  = match.group(1) if match else np.nan
+            
+            
+            if is_fscil:
+                try:
+                    with open(f'{path}classes_info.json') as f:
+                        classes_info = json.load(f)
                         
-            wanted_metrics = default_metrics + fscil_metric
-        else:
-            wanted_metrics = default_metrics
-            class_pool = None
-        
-        data['train_time'] = compute_train_time(path)
-        
-        data = get_metric(
-            path, data, wanted_metrics=wanted_metrics, class_pool=class_pool, 
-            folders=['adaptation_data']
-        )
-        data = get_metric(
-            path, data, wanted_metrics=['acc', 'f1_all_macro', 'f1_all_micro'], class_pool=None, 
-            folders=['pt_test_data']
-        )
-        tmp.append(pd.DataFrame([data]))
+                    data['old_classes'] = [int(k) for k in classes_info['old_classes'].keys()]
+                    data['new_classes'] = [int(k) for k in classes_info['new_classes'].keys()]
+                    class_pool = dict()
+                    class_pool['new'] = classes_info['all_classes'][0][len(data['old_classes']):]
+                    class_pool['old'] = classes_info['all_classes'][0][:len(data['old_classes'])]
+                    class_pool['all'] = None
+                            
+                    wanted_metrics = default_metrics + fscil_metric
+                except (FileNotFoundError, json.JSONDecodeError) as e:
+                    print(f"Warning: Could not process FSCIL data for {path}: {str(e)}")
+                    continue
+            else:
+                wanted_metrics = default_metrics
+                class_pool = None
+            
+            try:
+                data['train_time'] = compute_train_time(path)
+            except Exception as e:
+                print(f"Warning: Could not compute training time for {path}: {str(e)}")
+                data['train_time'] = np.nan
+            
+            try:
+                data = get_metric(
+                    path, data, wanted_metrics=wanted_metrics, class_pool=class_pool, 
+                    folders=['adaptation_data']
+                )
+                data = get_metric(
+                    path, data, wanted_metrics=['acc', 'f1_all_macro', 'f1_all_micro'], class_pool=None, 
+                    folders=['pt_test_data']
+                )
+                tmp.append(pd.DataFrame([data]))
+            except Exception as e:
+                print(f"Warning: Could not compute metrics for {path}: {str(e)}")
+                continue
+                
+        except Exception as e:
+            print(f"Warning: Could not process {args_path}: {str(e)}")
+            continue
 
+    if not tmp:
+        print("Warning: No valid data was collected!")
+        return pd.DataFrame()
+        
     return pd.concat(tmp, ignore_index=True)
 
 

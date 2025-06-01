@@ -148,7 +148,6 @@ class LightningUnsupervised(LightningModule):
             transformed = np.array([pkt_translating(sample, a=self.transform_strength) for sample in x_np])
         else:
             transformed = np.array([wrap(sample, a=self.transform_strength) for sample in x_np])
-        
         # Convert back to PyTorch tensor
         return torch.from_numpy(transformed).to(device)
 

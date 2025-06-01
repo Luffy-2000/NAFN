@@ -3,12 +3,38 @@ import torch
 import learn2learn as l2l
 from torch import nn
 from learn2learn.utils import accuracy
+import torch.nn.functional as F
+import numpy as np
 
 from approach.tl_module import LightningTLModule
 from modules.losses import DistillKLLoss
 from modules.teachers import Teacher
 from modules.classifiers import NN, LR
+from util.traffic_transformations import permutation, pkt_translating, wrap
+
 EPSILON = 1e-8
+
+
+class NTXentLoss(nn.Module):
+    def __init__(self, temperature=0.5):
+        super(NTXentLoss, self).__init__()
+        self.temperature = temperature
+        self.criterion = nn.CrossEntropyLoss()
+        
+    def forward(self, z_i, z_j):
+        batch_size = z_i.shape[0]
+        z_i = F.normalize(z_i, dim=1)
+        z_j = F.normalize(z_j, dim=1)
+        features = torch.cat([z_i, z_j], dim=0)
+        similarity_matrix = F.cosine_similarity(features.unsqueeze(1), features.unsqueeze(0), dim=2) / self.temperature
+        mask = torch.eye(2 * batch_size, dtype=bool, device=similarity_matrix.device)    
+        similarity_matrix[mask] = -float('inf')
+        pos_idx = torch.arange(batch_size, device=similarity_matrix.device)
+        pos_idx = torch.cat([pos_idx + batch_size, pos_idx], dim=0)
+        logits = similarity_matrix
+        labels = pos_idx
+        loss = self.criterion(logits, labels) / (2 * batch_size)
+        return loss
 
 
 class LightningRFS(LightningTLModule):
@@ -27,8 +53,6 @@ class LightningRFS(LightningTLModule):
         - is_distill (bool, optional): Whether to use knowledge distillation. Defaults to False.
         - teacher_path (str, optional): Path to the teacher model. Defaults to None.
         - base_learner (str, optional): Type of base learner ('lr' or 'nn'). Defaults to 'nn'.
-        - pretrained_autoencoder (str, optional): Path to pretrained autoencoder. Defaults to None.
-        - skip_training (bool, optional): Whether to skip training when using nn classifier. Defaults to False.
         - ``**kwargs`` (dict): Additional keyword arguments.
 
     Attributes:
@@ -43,7 +67,6 @@ class LightningRFS(LightningTLModule):
         - alpha (float): Weight for CE loss.
         - gamma (float): Weight for KL loss.
         - teacher (``src.modules.teacher.Teacher``): Teacher model instance.
-        - is_unsupervised (bool): Whether to run in unsupervised mode.
     """
     
     alpha = 0.5
@@ -52,9 +75,7 @@ class LightningRFS(LightningTLModule):
     kd_T = 1
     teacher_path = None
     base_learner = 'nn'
-    pretrained_autoencoder = None
-    is_unsupervised = False
-    
+
     def __init__(self, net, loss=None, **kwargs):
         super().__init__(**kwargs)
         
@@ -69,23 +90,23 @@ class LightningRFS(LightningTLModule):
         self.teacher_path = kwargs.get('teacher_path', LightningRFS.teacher_path)
         self.alpha = kwargs.get('alpha', LightningRFS.alpha) if self.is_distill else 0
         self.gamma = kwargs.get('gamma', LightningRFS.gamma) if self.is_distill else 1
-        self.pretrained_autoencoder = kwargs.get('pretrained_autoencoder', LightningRFS.pretrained_autoencoder)
-        self.is_unsupervised = kwargs.get('is_unsupervised', LightningRFS.is_unsupervised)
-        
+        # self.pretrained_autoencoder = kwargs.get('pretrained_autoencoder', LightningRFS.pretrained_autoencoder)
+        # self.is_unsupervised = kwargs.get('is_unsupervised', LightningRFS.is_unsupervised)
+
+        # Parameter of contrasctive learning
+        self.mode = kwargs.get('pre_mode', 'none')  # 'recon'或'contrastive'或'hybrid'
+        self.temperature = kwargs.get('temperature', 0.5)
+        self.transform_strength = kwargs.get('transform_strength', 0.8)
+        self.mes_loss = nn.MSELoss()
+        self.ntx_loss = NTXentLoss(temperature=self.temperature)
+        # 损失权重
+        self.recon_weight = kwargs.get('recon_weight', 0.5)
+        self.ce_weight = kwargs.get('ce_weight', 0.5)
+        self.contrastive_weight = kwargs.get('contrastive_weight', 0.5)
+
         assert (
             self.alpha + self.gamma == 1.0
         ), 'alpha + gamma should be equal to 1'
-
-
-        # If a pre-trained autoencoder is specified, load its weights and freeze
-        if self.pretrained_autoencoder:
-            print(f'Loading pretrained autoencoder from {self.pretrained_autoencoder}')
-            checkpoint = torch.load(self.pretrained_autoencoder, weights_only=True)
-            self.net.model.load_state_dict(checkpoint['encoder'])
-            self.net.head.load_state_dict(checkpoint['head'])
-
-            for param in self.net.model.parameters():
-                param.requires_grad = False
 
 
         self.teacher = Teacher(
@@ -103,8 +124,10 @@ class LightningRFS(LightningTLModule):
             "is_distill": self.is_distill,
             "teacher_path": self.teacher_path,
             "base_learner": self.base_learner,
-            "pretrained_autoencoder": self.pretrained_autoencoder,
-            "is_unsupervised": self.is_unsupervised
+            "pre_mode": self.mode,
+
+            # "pretrained_autoencoder": self.pretrained_autoencoder,
+            # "is_unsupervised": self.is_unsupervised
         })
 
 
@@ -142,12 +165,12 @@ class LightningRFS(LightningTLModule):
             choices=['lr', 'nn'],
             default=LightningRFS.base_learner
         )
-        parser.add_argument(
-            "--pretrained-autoencoder",
-            type=str,
-            default=LightningRFS.pretrained_autoencoder,
-            help="Path to pretrained autoencoder model"
-        )
+        # parser.add_argument(
+        #     "--pretrained-autoencoder",
+        #     type=str,
+        #     default=LightningRFS.pretrained_autoencoder,
+        #     help="Path to pretrained autoencoder model"
+        # )
         return parser
     
     def on_adaptation_start(self):
@@ -161,17 +184,86 @@ class LightningRFS(LightningTLModule):
                    f'{saved_weights_path}/teacher_ep{self.trainer.current_epoch}.pt')
     
 
+    def _apply_transform(self, x, transform_method=None):
+        """Apply the same random transformation to all samples in the batch"""
+        # Convert tensor to numpy for transformation
+        device = x.device
+        x_np = x.detach().cpu().numpy()
+        
+       # If transform_method is not specified, randomly choose one
+        if transform_method is None:
+            transform_method = np.random.choice([0, 1, 2])
+        elif transform_method not in [0, 1, 2]:
+            raise ValueError("transform_method must be 0, 1, or 2")
+
+        # Apply the same transformation to all samples
+        if transform_method == 0:
+            transformed = np.array([permutation(sample, a=self.transform_strength) for sample in x_np])
+        elif transform_method == 1:
+            transformed = np.array([pkt_translating(sample, a=self.transform_strength) for sample in x_np])
+        else:
+            transformed = np.array([wrap(sample, a=self.transform_strength) for sample in x_np])
+        # Convert back to PyTorch tensor
+        return torch.from_numpy(transformed).to(device)
+
     def pt_step(self, batch, batch_idx, **kwargs):
         data, labels = batch
-        student_logits = self.net(data)
-        teacher_logits = self.teacher(data)    # None
+        if self.is_distill:
+            student_logits = self.net(data)
+            teacher_logits = self.teacher(data)    # None
+            # CE on actual label and student logits
+            gamma_loss = self.ce_loss(student_logits, labels) 
+            # KL on teacher and student logits
+            alpha_loss = self.kl_loss(student_logits, teacher_logits)
+            eval_accuracy = accuracy(student_logits, labels)
+            loss = gamma_loss * self.gamma + alpha_loss * self.alpha  # tensor(5.3006, device='cuda:0')
+        else:
+            if self.mode == 'none':
+                student_logits = self.net(data)
+                teacher_logits = self.teacher(data)    # None
+                # CE on actual label and student logits
+                gamma_loss = self.ce_loss(student_logits, labels) 
+                # KL on teacher and student logits
+                alpha_loss = self.kl_loss(student_logits, teacher_logits)
+                eval_accuracy = accuracy(student_logits, labels)
+                loss = gamma_loss * self.gamma + alpha_loss * self.alpha  # tensor(5.3006, device='cuda:0')
+            elif self.mode == 'recon':
+                student_logits, _, recon_x = self.net(data, return_features=True)
+                recon_loss = self.mes_loss(recon_x, data)
+                ce_loss = self.ce_loss(student_logits, labels)
+                eval_accuracy = accuracy(student_logits, labels)
+                loss = self.recon_weight * recon_loss + self.ce_weight * ce_loss
+            elif self.mode == 'contrastive':
+                data_aug = self._apply_transform(data, transform_method=0)
+                student_logits, features, _ = self.net(data, return_features=True)
+                _ , features_aug, _ = self.net(data_aug, return_features=True)
 
-        # CE on actual label and student logits
-        gamma_loss = self.ce_loss(student_logits, labels) 
-        # KL on teacher and student logits
-        alpha_loss = self.kl_loss(student_logits, teacher_logits)
-        eval_accuracy = accuracy(student_logits, labels)
-        loss = gamma_loss * self.gamma + alpha_loss * self.alpha  # tensor(5.3006, device='cuda:0')
+                ce_loss = self.ce_loss(student_logits, labels)
+                contrastive_loss = self.ntx_loss(features, features_aug)
+                eval_accuracy = accuracy(student_logits, labels)
+                # 总损失 = 分类损失 + 对比损失
+                loss = self.ce_weight * ce_loss + self.contrastive_weight * contrastive_loss
+            elif self.mode == 'hybrid':
+                # 生成正样本
+                data_aug = self._apply_transform(data, transform_method=0)
+                
+                # 获取原始样本的输出
+                student_logits, features, recon_x = self.net(data, return_features=True)
+                # 获取增强样本的特征
+                _, features_aug, _ = self.net(data_aug, return_features=True)
+                
+                # 计算分类损失
+                ce_loss = self.ce_loss(student_logits, labels)
+                # 计算重构损失
+                recon_loss = self.mes_loss(recon_x, data)
+                # 计算对比损失
+                contrastive_loss = self.ntx_loss(features, features_aug)
+                
+                eval_accuracy = accuracy(student_logits, labels)
+                # 总损失 = 分类损失 + 重构损失 + 对比损失
+                loss = self.ce_weight * ce_loss + self.recon_weight * recon_loss + self.contrastive_weight * contrastive_loss
+            else:
+                raise ValueError(f"Mode '{self.mode}' does not exist! Available modes are: 'none', 'recon', 'contrastive', 'hybrid'")
 
         return {
             'loss': loss,
@@ -179,7 +271,8 @@ class LightningRFS(LightningTLModule):
             'labels': labels,
             'logits': student_logits
         }
-        
+    
+
     @torch.no_grad()
     def ft_step(self, batch):
         # Grad disabled since the backbone is frozen and a fully-connected head is not used
@@ -190,7 +283,7 @@ class LightningRFS(LightningTLModule):
         way = labels.unique().size(0)
 
         # Embed the input
-        _, feats = self.net(data, return_features=True)
+        _, feats, _ = self.net(data, return_features=True)
         
         # Split the embedded input
         batch_support, batch_query = l2l.data.utils.partition_task(
@@ -229,7 +322,7 @@ class LightningRFS(LightningTLModule):
         
         y_pred = y_pred.to(self._device)
         query_accuracy = (y_pred == query_labels).sum().float() / y_pred.size(0)  
-            
+        
         return {
             'loss': eval_loss,
             'accuracy': query_accuracy,

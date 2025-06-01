@@ -33,12 +33,13 @@ def plot_confusion_matrix(exp_path):
         
         os.makedirs(f'{exp_path}/img', exist_ok=True)
             
-        avg_cm = util.metrics.compute_confusion_matrix(
+        avg_cm, avg_cm_raw = util.metrics.compute_confusion_matrix(
             path=f'{exp_path}/{folder}', 
             files=['logits', 'labels']
         )
-        df_cm = pd.DataFrame(avg_cm)
         
+        # 保存归一化的混淆矩阵
+        df_cm = pd.DataFrame(avg_cm)
         plt.figure(figsize=(15,14))
         sn.set_theme(font_scale=1.4)
         p = sn.heatmap(df_cm, fmt='.2f', square=True, vmin=0, vmax=1)
@@ -46,6 +47,16 @@ def plot_confusion_matrix(exp_path):
         f = p.get_figure()
         f.savefig(f'{exp_path}/img/cm_{folder}.pdf', bbox_inches="tight")
         df_cm.to_csv(f'{exp_path}/img/cm_{folder}.csv')
+        
+        # 保存未归一化的混淆矩阵
+        df_cm_raw = pd.DataFrame(avg_cm_raw)
+        plt.figure(figsize=(15,14))
+        sn.set_theme(font_scale=1.4)
+        p = sn.heatmap(df_cm_raw, fmt='d', square=True)  # 使用整数格式
+        p.set(ylabel='True Label', xlabel='Predicted Label')
+        f = p.get_figure()
+        f.savefig(f'{exp_path}/img/cm_{folder}_raw.pdf', bbox_inches="tight")
+        df_cm_raw.to_csv(f'{exp_path}/img/cm_{folder}_raw.csv')
 
 
 def get_metric(exp_path, folders, wanted_metrics, class_pool=None):

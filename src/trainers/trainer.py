@@ -36,48 +36,28 @@ class TLTrainer:
         """ 
         Create a PL Trainer given args dict 
         """
-        trainer_args = {
-            'gpus': self.args.gpus,
-            'deterministic': True,
-            'accumulate_grad_batches': self.args.accumulate_grad_batches,
-            'callbacks': self.callbacks[-1]
-        }
-        
-        # If it is unsupervised learning, use the validation set to monitor training
-        if hasattr(self.args, 'is_unsupervised') and self.args.is_unsupervised:
-            trainer_args['checkpoint_callback'] = ModelCheckpoint(
-                mode='min', 
-                monitor='val_loss'
-            )
-        else:
-            trainer_args['checkpoint_callback'] = ModelCheckpoint(
-                mode=self.args.mode, 
-                monitor=self.args.monitor
-            )
-            
-        return pl.Trainer.from_argparse_args(self.args, **trainer_args)
+        return pl.Trainer.from_argparse_args(
+            self.args,
+            gpus=self.args.gpus,
+            deterministic=True,
+            accumulate_grad_batches=self.args.accumulate_grad_batches,
+            checkpoint_callback=ModelCheckpoint(mode=self.args.mode, monitor=self.args.monitor),
+            callbacks=self.callbacks[-1]
+        )
         
         
     def create_callbacks(self, callbacks=[]):
         """ 
         Create a set of default callbacks with the one passed in 'callbacks' 
         """
-        # If it is unsupervised learning, use the validation set loss as the monitoring indicator
-        if hasattr(self.args, 'is_unsupervised') and self.args.is_unsupervised:
-            monitor = 'val_loss'
-            mode = 'min'
-        else:
-            monitor = self.args.monitor
-            mode = self.args.mode
-
         default_callbacks = [
             util.callbacks.NoLeaveProgressBar(),
             util.callbacks.LearningRateMonitorOnLog(logging_interval='epoch'),
             util.callbacks.EarlyStoppingDoubleMetric(
-                monitor=monitor, 
+                monitor=self.args.monitor, 
                 min_delta=self.args.min_delta,
                 patience=self.args.patience, 
-                mode=mode, 
+                mode=self.args.mode, 
                 verbose=True,
                 double_monitor=self.args.double_monitor)
         ]
@@ -90,19 +70,19 @@ class TLTrainer:
         """
         self.save_args()
         
-        # If it is unsupervised learning, use datamodule
-        if hasattr(approach, 'is_unsupervised') and approach.is_unsupervised:
-            self.trainers[0].fit(
-                model=approach,
-                datamodule=datamodule
-            )
-        else:
-            self.trainers[0].fit(
-                model=approach,
-                datamodule=datamodule,
-                train_dataloader=train_dataloader,
-                val_dataloaders=val_dataloader,
-            )
+        # # If it is unsupervised learning, use datamodule
+        # if hasattr(approach, 'is_unsupervised') and approach.is_unsupervised:
+        #     self.trainers[0].fit(
+        #         model=approach,
+        #         datamodule=datamodule
+        #     )
+        # else:
+        self.trainers[0].fit(
+            model=approach,
+            datamodule=datamodule,
+            train_dataloader=train_dataloader,
+            val_dataloaders=val_dataloader,
+        )
     
     
     def test(self):  
@@ -118,7 +98,7 @@ class TLTrainer:
         """ 
         Implementation of the fine-tuning stage with a FSL/FSCIL procedure 
         """
-        if self.args.pretrained_autoencoder or self.args.ft_only or already_resumed:
+        if self.args.ft_only or already_resumed:
             # Use current model weights
             best_approach = approach
         else:
@@ -128,7 +108,6 @@ class TLTrainer:
             print('-'*80)
             best_approach = type(approach).load_from_checkpoint(
                 net=approach.net, checkpoint_path=best_ckpt_path, **vars(self.args))
-
         # Adaptation on the Support Set and evaluation on the Query Set
         losses = []
         accuracies = []

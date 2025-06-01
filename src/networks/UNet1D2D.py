@@ -43,7 +43,7 @@ class Up(nn.Module):
 
 
 class UNet1D2D(nn.Module):
-    def __init__(self, in_channels=1, out_channels=1, base_filters=32, **kwargs):
+    def __init__(self, in_channels=1, out_channels=1, base_filters=16, **kwargs):
         super().__init__()
         self.out_features_size = kwargs['out_features_size'] or 200
         self.inc = ConvBlock(in_channels, base_filters)
@@ -53,32 +53,28 @@ class UNet1D2D(nn.Module):
         self.up2 = Up(base_filters * 2, base_filters)
         self.outc = nn.Conv2d(base_filters, out_channels, kernel_size=1)
 
-         # Bottleneck for feature extraction
-        self.bottleneck = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)),  # (batch, channels, 1, 1)
-            nn.Flatten(),
-            nn.Linear(base_filters * 4, self.out_features_size),  
-            nn.ReLU(inplace=True)
-        )
-
 
     def forward(self, x):
-        x1 = self.inc(x)      # (20, 6)
-        x2 = self.down1(x1)   # (10, 3)
-        x3 = self.down2(x2)   # (5, 1)
-        features = self.bottleneck(x3)  
-
-        x = self.up1(x3, x2)  # (10, 3)
-        x = self.up2(x, x1)   # (20, 6)
-        out = self.outc(x)    # output
+        # Extract features and intermediate features
+        features, x1, x2, x3 = self.extract_features(x)
+        # Reconstruct from features
+        out = self.recon_features(features, x1, x2, x3)
         return out, features
-    
 
     def extract_features(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)
-        x3 = self.down2(x2)  # batch, base_filters * 4, 5, 1
-        features = self.bottleneck(x3) 
-        return features
+        x3 = self.down2(x2)
+        features = x3.flatten(1)
+        return features, x1, x2, x3
+
+    def recon_features(self, features, x1, x2, x3):
+        # Reconstruct x3 from features
+        x3_recon = features.view(x3.shape)
+        # Upsampling path
+        x = self.up1(x3_recon, x2)  # (10, 3)
+        x = self.up2(x, x1)   # (20, 6)
+        out = self.outc(x)    # output
+        return out
 
 
