@@ -43,7 +43,7 @@ class NetworkingDataset(Dataset):
         # Shift other.labels by max_existing_class + 1
         max_existing_class = torch.max(self.labels).item()
         y_re = y_re + max_existing_class + 1
-
+        
         self.labels = torch.cat((self.labels, y_re))
         self.images = np.concatenate((self.images, other.images), axis=0)
         self.seeds = np.concatenate((self.seeds, other.seeds), axis=0)
@@ -204,7 +204,7 @@ def _hold_out(x, y, seed, enc=True):
 
 
 def split(
-    dc, num_pkts=None, fields=None, classes_per_set=[], shuffle_classes=False, is_fscil=False, seed=0, is_unsupervised=False
+    dc, num_pkts=None, fields=None, classes_per_set=[], shuffle_classes=False, is_fscil=False, seed=0
 ):
     """
     Splits the dataset into pre-training (train, val and test) and fine-tuning set sets 
@@ -219,7 +219,6 @@ def split(
         - classes_per_set (``list`` of ``int``, optional): A list specifying the number of classes 
           per set. It should contain 0 or 2 elements. Defaults to [].
         - seed (``int``, optional): The random seed for dataset splitting. Defaults to 0.
-        - is_unsupervised (``bool``, optional): Whether to use unsupervised pre-training. Defaults to False.
 
     Returns:
         ``tuple``: A tuple containing:
@@ -254,19 +253,13 @@ def split(
     ft_ways = len(classes['tst'])
 
 
-    if is_unsupervised:
+
+    if is_fscil:
         train_set, val_set, test_set = _balanced_hold_out(x_pt, y_pt, seed, enc=True)
-        train_set.is_unsupervised = True
-        val_set.is_unsupervised = True
-        test_set.is_unsupervised = True
-        return [pt_ways, ft_ways], train_set, test_set, val_set, None
+        test_set_t1 = _dataset_from_labels(x, y, classes['tst'])
+        finetune_set = copy.deepcopy(test_set)
+        finetune_set.merge(test_set_t1)
     else:
-        if is_fscil:
-            train_set, val_set, test_set = _balanced_hold_out(x_pt, y_pt, seed, enc=True)
-            test_set_t1 = _dataset_from_labels(x, y, classes['tst'])
-            finetune_set = copy.deepcopy(test_set)
-            finetune_set.merge(test_set_t1)
-        else:
-            train_set, val_set, test_set = _hold_out(x_pt, y_pt, seed, enc=True)
-            finetune_set = _dataset_from_labels(x, y, classes['tst']) 
-        return [pt_ways, ft_ways], train_set, test_set, val_set, finetune_set
+        train_set, val_set, test_set = _hold_out(x_pt, y_pt, seed, enc=True)
+        finetune_set = _dataset_from_labels(x, y, classes['tst']) 
+    return [pt_ways, ft_ways], train_set, test_set, val_set, finetune_set

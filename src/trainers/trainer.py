@@ -112,6 +112,7 @@ class TLTrainer:
         losses = []
         accuracies = []
         outputs = []
+        
         ft_loop = tqdm(dataloader)
         
         best_approach.on_adaptation_start()
@@ -133,7 +134,8 @@ class TLTrainer:
             outputs=outputs, 
             path=f'{self.trainers[-1].logger.log_dir}', 
         )
-        
+
+    
         # Return the avg per episode metrics     
         eval_res = {
             'adaptation_loss': np.array(losses).mean(),
@@ -155,10 +157,6 @@ class TLTrainer:
     
     def save_results(self, eval_res, trainer_idx=-1):
         # If it is unsupervised learning, only clean the model file
-        if hasattr(self.args, 'is_unsupervised') and self.args.is_unsupervised:
-            util.cleanup.cleanup_autoencoder_models(self.trainers[trainer_idx].logger.log_dir)
-            return
-            
         f1_scores = util.logger.get_metric(
             exp_path=self.trainers[trainer_idx].logger.log_dir,
             folders=['adaptation_data', 'pt_test_data'],

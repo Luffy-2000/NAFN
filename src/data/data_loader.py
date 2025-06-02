@@ -7,7 +7,6 @@ from data import networking_dataset as netdat
 from data.dataset_config import dataset_config
 from data.datamodules import PLDataModule
 from data.memory_selection import HerdingExemplarsSelector, UncertaintyExemplarsSelector
-# from data.networking_dataset import UnsupervisedNetworkingDataset
 
 class MemoryTaskDataset(l2l.data.TaskDataset):
     """Extend TaskDataset to support memory management"""
@@ -52,7 +51,9 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         task = super().sample_task()
         
         if self.memory_dataset is not None:
+            print(f"Memory dataset: {self.memory_dataset}")
             memory_task = self._sample_memory_task()
+            print(f"Memory task: {memory_task}")
             task = self._merge_tasks(task, memory_task)
             
         return task
@@ -73,7 +74,7 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         """Merge original task and memory task"""
         if memory_task is None:
             return task
-            
+        
         # Merge data
         merged_data = torch.cat([task.data, memory_task.data], dim=0)
         merged_labels = torch.cat([task.labels, memory_task.labels], dim=0)
@@ -111,13 +112,6 @@ def get_loaders(
         dc, num_pkts, fields, classes_per_set, shuffle_classes, is_fscil, seed
     )
 
-    # if is_unsupervised:
-    #     unsupervised_datamodule = PLDataModule(
-    #         train_set=train_set,
-    #         val_set=val_set,  
-    #         test_set=test_set, 
-    #     )
-    #     return ways, unsupervised_datamodule, None
 
     pretrain_datamodule = PLDataModule(
         train_set=train_set,
@@ -134,7 +128,7 @@ def get_loaders(
         num_tasks=num_tasks,
         memory_selector=memory_selector
     )
-
+    
     return ways, pretrain_datamodule, finetune_taskset
 
 def _get_taskset(dataset, ways, queries, shots, num_tasks, memory_selector='herding'):

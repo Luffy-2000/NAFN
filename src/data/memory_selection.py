@@ -6,29 +6,26 @@ from typing import Iterable, Optional, Union, List
 from torch.utils.data import Dataset, DataLoader
 from torch import nn
 
-class LLL_Net(nn.Module):
-	"""Base class for Lifelong Learning Networks"""
-	pass
 
-class ExemplarsDataset(Dataset):
-	"""Dataset to store exemplars for memory management"""
+# class ExemplarsDataset(Dataset):
+# 	"""Dataset to store exemplars for memory management"""
 	
-	def __init__(self, max_num_exemplars=None, max_num_exemplars_per_class=None):
-		self.max_num_exemplars = max_num_exemplars
-		self.max_num_exemplars_per_class = max_num_exemplars_per_class
-		self.exemplars = []
-		self.labels = []
+# 	def __init__(self, max_num_exemplars=None, max_num_exemplars_per_class=None):
+# 		self.max_num_exemplars = max_num_exemplars
+# 		self.max_num_exemplars_per_class = max_num_exemplars_per_class
+# 		self.exemplars = []
+# 		self.labels = []
 		
-	def __len__(self):
-		return len(self.exemplars)
+# 	def __len__(self):
+# 		return len(self.exemplars)
 		
-	def __getitem__(self, idx):
-		return self.exemplars[idx], self.labels[idx]
+# 	def __getitem__(self, idx):
+# 		return self.exemplars[idx], self.labels[idx]
 		
-	def add_exemplars(self, exemplars, labels):
-		"""Add new exemplars to the dataset"""
-		self.exemplars.extend(exemplars)
-		self.labels.extend(labels)
+# 	def add_exemplars(self, exemplars, labels):
+# 		"""Add new exemplars to the dataset"""
+# 		self.exemplars.extend(exemplars)
+# 		self.labels.extend(labels)
 
 class ExemplarsSelector:
 	"""Exemplar selector for approaches with an interface of Dataset"""
