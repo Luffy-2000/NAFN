@@ -9,7 +9,6 @@ import sys
 import numpy as np
 import copy
 
-# 导入流量变换函数用于对比学习
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from util.traffic_transformations import permutation, pkt_translating, wrap
 
@@ -82,7 +81,7 @@ class LightningUnsupervised(LightningModule):
         self.eta_min = kwargs.get('eta_min', LightningUnsupervised.eta_min)
 
         # 对比学习参数
-        self.mode = kwargs.get('pre_mode', 'recon')  # 'recon'或'contrastive'或'hybrid'
+        self.mode = kwargs.get('pre_mode', 'recon')  # 'recon'or'contrastive'or'hybrid'
         self.temperature = kwargs.get('temperature', 0.5)
         self.transform_strength = kwargs.get('transform_strength', 0.8)
         
@@ -110,9 +109,7 @@ class LightningUnsupervised(LightningModule):
         self.is_unsupervised = True  # Add unsupervised learning flag
         self.save_hyperparameters()
 
-        # #双塔模型复制
-        # self.copy_net = copy.deepcopy(net)
-
+    
         self.criterion_reconstructive = nn.MSELoss()
         self.criterion_classify = nn.CrossEntropyLoss()
         self.criterion_contrastive = NTXentLoss(temperature=self.temperature)

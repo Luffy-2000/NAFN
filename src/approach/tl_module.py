@@ -139,8 +139,7 @@ class LightningTLModule(LightningModule):
         )
         return outputs['loss']
     
-    def validation_step
-    (self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx):
         outputs = self.pt_step(batch, batch_idx)
         
         self.log(
