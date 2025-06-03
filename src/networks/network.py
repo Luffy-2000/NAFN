@@ -102,7 +102,7 @@ class LLL_Net(nn.Module):
         if path is None:
             return
         
-        state_dict = torch.load(path)
-            
+        state_dict = torch.load(path, weights_only=True)
+    
         self.load_state_dict(state_dict)
         print(f'Model loaded from {path}')

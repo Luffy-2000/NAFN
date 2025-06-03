@@ -11,13 +11,12 @@ import data.utility as util
 class NetworkingDataset(Dataset):
     """Characterizes a dataset for PyTorch -- this dataset pre-loads all biflows in memory"""
 
-    def __init__(self, data, class_indices=None, is_unsupervised=False):
+    def __init__(self, data, class_indices=None):
         """Initialization"""
         self.labels = data['y']
         self.images = data['x']
         self.seeds = data['s']
         self.class_indices = class_indices
-        self.is_unsupervised = is_unsupervised
 
     def __len__(self):
         """Denotes the total number of samples"""
@@ -44,12 +43,13 @@ class NetworkingDataset(Dataset):
         max_existing_class = torch.max(self.labels).item()
         y_re = y_re + max_existing_class + 1
         
+        # merge other.labels with self.labels
         self.labels = torch.cat((self.labels, y_re))
         self.images = np.concatenate((self.images, other.images), axis=0)
         self.seeds = np.concatenate((self.seeds, other.seeds), axis=0)
         
         ci.data['all_classes'] = [arr.tolist() for arr in self.labels.unique(return_counts=True)]
-        print(ci.data)
+        print("ci.data", ci.data)
     
 
 def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False, is_unsupervised=False):
@@ -90,7 +90,7 @@ def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False
                if indices is not None else [])
 
     data = dict(zip(['x', 'y', 's'], [x, y, indices]))
-    return NetworkingDataset(data, is_unsupervised=is_unsupervised)
+    return NetworkingDataset(data)
 
 
 def _class_split(fs_split, classes_per_set=[], sets_number=3):

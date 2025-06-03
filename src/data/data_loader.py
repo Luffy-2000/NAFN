@@ -7,21 +7,31 @@ from data import networking_dataset as netdat
 from data.dataset_config import dataset_config
 from data.datamodules import PLDataModule
 from data.memory_selection import HerdingExemplarsSelector, UncertaintyExemplarsSelector
+import random
 
 class MemoryTaskDataset(l2l.data.TaskDataset):
-    """Extend TaskDataset to support memory management"""
-    
+    """Extend TaskDataset to support FSCIL memory"""
     def __init__(
         self, 
-        dataset, 
+        dataset,  # finetune_set = 旧+新 测试集
         memory_dataset: Optional[torch.utils.data.Dataset] = None,
         task_transforms: List = None, 
         num_tasks: int = -1,
-        memory_selector: str = 'herding'
+        memory_selector: str = 'herding',
+        shots: int = 5,
+        queries: int = 5,
+        ways: int = 5,  # 新类别数量
+        old_class_ids: Optional[List[int]] = None,
+        new_class_ids: Optional[List[int]] = None
     ):
         super().__init__(dataset, task_transforms, num_tasks)
         self.memory_dataset = memory_dataset
         self.memory_selector = self._get_memory_selector(memory_selector)
+        self.shots = shots
+        self.queries = queries
+        self.ways = ways  # 新类别 ways
+        self.old_class_ids = old_class_ids
+        self.new_class_ids = new_class_ids
         
     def _get_memory_selector(self, selector_type: str):
         """Get memory selector based on type"""
@@ -31,60 +41,106 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
             return UncertaintyExemplarsSelector
         else:
             raise ValueError(f"Unknown memory selector type: {selector_type}")
-            
-    def update_memory(self, model, new_data, exemplars_per_class: int):
-        """Update memory bank with new data"""
+
+    def initialize_memory(self, model, train_set):
+        """Select memory samples from training set"""
         if self.memory_selector is None:
             return
-            
-        selector = self.memory_selector(new_data)
-        memory_data = selector(
+        selector = self.memory_selector(train_set, max_num_exemplars=1000, max_num_exemplars_per_class=self.shots)
+        x, y = selector(
             model=model,
-            trn_loader=torch.utils.data.DataLoader(new_data, batch_size=32),
+            trn_loader=torch.utils.data.DataLoader(train_set, batch_size=32),
             transform=None,
-            exemplars_per_class=exemplars_per_class
+            clean_memory=True,
         )
-        self.memory_dataset = memory_data
+        # Wrap memory as TensorDataset
+        self.memory_dataset = torch.utils.data.TensorDataset(x, y)
 
     def sample_task(self):
-        """Sample task including memory bank samples"""
-        task = super().sample_task()
-        
-        if self.memory_dataset is not None:
-            print(f"Memory dataset: {self.memory_dataset}")
-            memory_task = self._sample_memory_task()
-            print(f"Memory task: {memory_task}")
-            task = self._merge_tasks(task, memory_task)
-            
-        return task
-        
-    def _sample_memory_task(self):
-        """Sample task from memory bank"""
-        if self.memory_dataset is None:
-            return None
-            
-        # Apply same task transformations
-        memory_md = l2l.data.MetaDataset(self.memory_dataset)
-        for transform in self.task_transforms:
-            memory_md = transform(memory_md)
-            
-        return memory_md
-        
-    def _merge_tasks(self, task, memory_task):
-        """Merge original task and memory task"""
-        if memory_task is None:
-            return task
-        
-        # Merge data
-        merged_data = torch.cat([task.data, memory_task.data], dim=0)
-        merged_labels = torch.cat([task.labels, memory_task.labels], dim=0)
-        
-        # Create new task
-        merged_task = l2l.data.Task(
-            data=merged_data,
-            labels=merged_labels
-        )
-        return merged_task
+        '''Build FSCIL task'''
+        #Memory support → 全部旧类 support
+        if self.memory_dataset is not None and len(self.memory_dataset) > 0:
+            memory_x, memory_y = zip(*[self.memory_dataset[i] for i in range(len(self.memory_dataset))])
+            memory_x = torch.stack(memory_x)
+            memory_y = torch.tensor(memory_y)
+        else:
+            memory_x = torch.empty(0)
+            memory_y = torch.empty(0, dtype=torch.long)
+
+        # 新类 support → 从 finetune_set 采 new_class_ids + shots per class
+        new_support_x, new_support_y = self._sample_new_support()
+
+        # Query set → 从 finetune_set 采：
+        #    - 旧类 query（旧类 id）
+        #    - 新类 query（新类 id）
+        old_query_x, old_query_y = self._sample_old_query()
+        new_query_x, new_query_y = self._sample_new_query()
+
+        # Merge support
+        support_data = torch.cat([memory_x, new_support_x], dim=0)
+        support_labels = torch.cat([memory_y, new_support_y], dim=0)
+
+        # Merge query
+        query_data = torch.cat([old_query_x, new_query_x], dim=0)
+        query_labels = torch.cat([old_query_y, new_query_y], dim=0)
+
+        # 返回 Task
+        x = torch.cat([support_data, query_data], dim=0)
+        y = torch.cat([support_labels, query_labels], dim=0)
+        return x, y
+        # return task
+
+    def _sample_new_support(self):
+        '''Sample new class support'''
+        # 从 dataset (finetune_set) 按 new_class_ids 抽样 shots per class
+        x_list, y_list = [], []
+        for cls in self.new_class_ids:
+            cls_indices = [i for i, (_, label) in enumerate(self.dataset) if label.item() == cls]
+            selected_idx = random.sample(cls_indices, self.shots)
+            x_cls, y_cls = zip(*[self.dataset[i] for i in selected_idx])
+            x_cls = torch.stack([torch.tensor(xi) for xi in x_cls])
+            y_cls = torch.tensor(y_cls)
+            x_list.append(x_cls)
+            y_list.append(y_cls)
+        return torch.cat(x_list, dim=0), torch.cat(y_list, dim=0)
+
+    def _sample_old_query(self):
+        '''Sample old class query'''
+        x_list, y_list = [], []
+        for cls in self.old_class_ids:
+            cls_indices = [i for i, (_, label) in enumerate(self.dataset) if label.item() == cls]
+            selected_idx = random.sample(cls_indices, self.queries)
+            x_cls, y_cls = zip(*[self.dataset[i] for i in selected_idx])
+            x_cls = torch.stack([torch.tensor(xi) for xi in x_cls])
+            y_cls = torch.tensor(y_cls)
+            x_list.append(x_cls)
+            y_list.append(y_cls)
+        return torch.cat(x_list, dim=0), torch.cat(y_list, dim=0)
+
+    def _sample_new_query(self):
+        '''Sample new class query'''
+        x_list, y_list = [], []
+        for cls in self.new_class_ids:
+            cls_indices = [i for i, (_, label) in enumerate(self.dataset) if label.item() == cls]
+            selected_idx = random.sample(cls_indices, self.queries)
+            x_cls, y_cls = zip(*[self.dataset[i] for i in selected_idx])
+            x_cls = torch.stack([torch.tensor(xi) for xi in x_cls])
+            y_cls = torch.tensor(y_cls)
+            x_list.append(x_cls)
+            y_list.append(y_cls)
+        return torch.cat(x_list, dim=0), torch.cat(y_list, dim=0)
+
+
+class EpisodeLoader(torch.utils.data.IterableDataset):
+    def __init__(self, task_dataset, num_episodes):
+        self.task_dataset = task_dataset
+        self.num_episodes = num_episodes
+
+    def __iter__(self):
+        for _ in range(self.num_episodes):
+            x, y = self.task_dataset.sample_task()
+            yield x, y
+
 
 def get_loaders(
     dataset, num_pkts, fields, queries, shots, num_tasks, 
@@ -112,24 +168,23 @@ def get_loaders(
         dc, num_pkts, fields, classes_per_set, shuffle_classes, is_fscil, seed
     )
 
-
     pretrain_datamodule = PLDataModule(
         train_set=train_set,
         val_set=val_set,
         test_set=test_set,
     )
     
-    # Use MemoryTaskDataset instead of original TaskDataset
-    finetune_taskset = _get_taskset(
-        dataset=finetune_set,
-        ways=sum(ways) if is_fscil else ways[1],
-        queries=queries,
-        shots=shots,
-        num_tasks=num_tasks,
-        memory_selector=memory_selector
-    )
+    # # Use MemoryTaskDataset instead of original TaskDataset
+    # finetune_taskset = _get_taskset(
+    #     dataset=finetune_set,
+    #     ways=sum(ways) if is_fscil else ways[1],
+    #     queries=queries,
+    #     shots=shots,
+    #     num_tasks=num_tasks,
+    #     memory_selector=memory_selector
+    # )
     
-    return ways, pretrain_datamodule, finetune_taskset
+    return ways, pretrain_datamodule, finetune_set
 
 def _get_taskset(dataset, ways, queries, shots, num_tasks, memory_selector='herding'):
     # Task size is equal to train/test_ways (N) * train/test_queries (K_query) + train/test_shots (K_support)

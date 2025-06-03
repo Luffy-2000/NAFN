@@ -1,12 +1,14 @@
 from copy import deepcopy
 from argparse import ArgumentParser
 from pytorch_lightning import Trainer
-
+import torch
 import util.rng as rng
 import util.callbacks as callbacks
-from data.data_loader import get_loaders 
+from data.data_loader import get_loaders, MemoryTaskDataset, EpisodeLoader
 from networks.network import LLL_Net
 from trainers.trainer import TLTrainer
+# from data.memory_selection import HerdingExemplarsSelector, UncertaintyExemplarsSelector
+from data.memory_selection import ExemplarsSelector
 from approach import (
     LightningRFS,
     LightningTLModule,
@@ -33,7 +35,7 @@ def main():
     parser.add_argument('--num-tasks', type=int, default=100)
     parser.add_argument('--classes-per-set', type=int, default=[], nargs='+')
     parser.add_argument('--shuffle-classes', action='store_true', default=False)
-    parser.add_argument('--memory-selector', type=str, default='uncertainty',
+    parser.add_argument('--memory-selector', type=str, default='herding',
                       choices=['herding', 'uncertainty'],
                       help='Memory selector type for FSCIL (herding or uncertainty)')
     # Exp args
@@ -98,9 +100,11 @@ def main():
         is_fscil=args.is_fscil,
         num_tasks=args.num_tasks
     )
+
     # ways [7, 3]
     # pretrain_datamodule <data.datamodules.PLDataModule object at 0x7ff376c780d0>
     # finetune_taskset <learn2learn.data.task_dataset.TaskDataset object at 0x7ff376ad0e80>
+
 
     ####
     ## 2 - GET MODEL AND APPROACH
@@ -116,20 +120,6 @@ def main():
         args.approach, net, **dict_args)
     
     
-    # if args.is_unsupervised:
-    #     # Unsupervised learning
-    #     args.num_outputs =  ways[0]
-    #     net = LLL_Net.factory_network(**vars(args))
-    #     approach = LightningUnsupervised(net, **dict_args)
-        
-    # else:
-    #     # Supervised learning
-    #     args.num_outputs = ways[0] # 7
-        
-    #     net = LLL_Net.factory_network(**vars(args))
-    #     approach = LightningTLModule.factory_approach(
-    #         args.approach, net, **dict_args)
-
     ####
     ## 3 - TRAIN AND TEST
     ####   
@@ -139,9 +129,6 @@ def main():
     # Pre-training
     eval_res = {}
     if args.pt_only or not args.ft_only:
-        # if args.is_unsupervised:
-        #     tl_trainer.fit(approach=approach, datamodule=pretrain_datamodule)
-        # else:
         # Set finetuning dataset in the trainer
         tl_trainer.set_finetune_taskset(finetune_taskset)
         # Pre-Training fit
@@ -150,10 +137,28 @@ def main():
         eval_res = tl_trainer.test()[0]
 
 
+    # initialize memory selection
+    memory_task_dataset = MemoryTaskDataset(
+        dataset=finetune_taskset,
+        memory_dataset = pretrain_datamodule.train_set, 
+        memory_selector=args.memory_selector, 
+        ways=ways[1],  # 新类数量
+        shots=args.shots, 
+        queries=args.queries,
+        old_class_ids=list(range(ways[0])),
+        new_class_ids=list(range(ways[0], ways[0] + ways[1]))
+    )
+    memory_task_dataset.initialize_memory(net, pretrain_datamodule.train_set)
+
+    episode_loader = torch.utils.data.DataLoader(
+        EpisodeLoader(memory_task_dataset, num_episodes=args.num_tasks),
+        batch_size=None
+    )
+    
     # Adaptation
     if not args.pt_only or args.ft_only:
         # if not args.is_unsupervised:
-            ft_res = tl_trainer.adaptation(approach=approach, dataloader=finetune_taskset)
+            ft_res = tl_trainer.adaptation(approach=approach, dataloader=episode_loader)
             # print(f"ft_res: {ft_res}")
             eval_res = {**eval_res, **ft_res}
     tl_trainer.save_results(eval_res)

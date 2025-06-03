@@ -5,34 +5,17 @@ from copy import deepcopy
 from typing import Iterable, Optional, Union, List
 from torch.utils.data import Dataset, DataLoader
 from torch import nn
-
-
-# class ExemplarsDataset(Dataset):
-# 	"""Dataset to store exemplars for memory management"""
-	
-# 	def __init__(self, max_num_exemplars=None, max_num_exemplars_per_class=None):
-# 		self.max_num_exemplars = max_num_exemplars
-# 		self.max_num_exemplars_per_class = max_num_exemplars_per_class
-# 		self.exemplars = []
-# 		self.labels = []
-		
-# 	def __len__(self):
-# 		return len(self.exemplars)
-		
-# 	def __getitem__(self, idx):
-# 		return self.exemplars[idx], self.labels[idx]
-		
-# 	def add_exemplars(self, exemplars, labels):
-# 		"""Add new exemplars to the dataset"""
-# 		self.exemplars.extend(exemplars)
-# 		self.labels.extend(labels)
+import math
+from networks.network import LLL_Net
 
 class ExemplarsSelector:
 	"""Exemplar selector for approaches with an interface of Dataset"""
 
-	def __init__(self, exemplars_dataset: ExemplarsDataset):
+	def __init__(self, exemplars_dataset, max_num_exemplars=100, max_num_exemplars_per_class=10):
 		self.exemplars_dataset = exemplars_dataset
 		self.already_added_classes = ()
+		self.max_num_exemplars = max_num_exemplars
+		self.max_num_exemplars_per_class = max_num_exemplars_per_class
 
 	def __call__(self, model: LLL_Net, trn_loader: DataLoader, transform, t=None, from_inputs=False,
 				 clean_memory=False, alternate=False, step_selection=False):
@@ -44,32 +27,34 @@ class ExemplarsSelector:
 			tmp_model.task_offset = tmp_model.task_offset[:t + 1]
 		clock0 = time.time()
 		exemplars_per_class = self._exemplars_per_class_num(tmp_model)
-		with override_dataset_transform(trn_loader.dataset, transform) as ds_for_selection:
-			# change loader and fix to go sequentially (shuffle=False), keeps same order for later, eval transforms
-			sel_loader = DataLoader(ds_for_selection, batch_size=trn_loader.batch_size, shuffle=False,
-									num_workers=trn_loader.num_workers, pin_memory=trn_loader.pin_memory)
-			selected_indices = self._select_indices(
-				tmp_model, sel_loader, exemplars_per_class, transform, from_inputs, clean_memory, alternate, step_selection)
-			self.already_added_classes = set(_get_labels(sel_loader))
-		with override_dataset_transform(trn_loader.dataset, Lambda(lambda x: np.array(x))) as ds_for_raw:
-			x, y = zip(*(ds_for_raw[idx] for idx in selected_indices))
+
+		sel_loader = DataLoader(trn_loader.dataset, batch_size=trn_loader.batch_size, shuffle=False,
+							num_workers=trn_loader.num_workers, pin_memory=trn_loader.pin_memory)
+		selected_indices = self._select_indices(
+			tmp_model, sel_loader, exemplars_per_class, transform, from_inputs, clean_memory, alternate, step_selection)
+		# self.already_added_classes = set(_get_labels(sel_loader))
+
+		x, y = zip(*(trn_loader.dataset[idx] for idx in selected_indices))
+		x = torch.tensor(np.array(x))
+		y = torch.stack(y)
 		clock1 = time.time()
 		print('| Selected {:d} train exemplars, time={:5.1f}s'.format(len(x), clock1 - clock0))
 		return x, y
 
-	def _exemplars_per_class_num(self, model: LLL_Net):
-		if self.exemplars_dataset.max_num_exemplars_per_class:
-			return self.exemplars_dataset.max_num_exemplars_per_class
 
+	def _exemplars_per_class_num(self, model: LLL_Net):
+		if self.max_num_exemplars_per_class:
+			return self.max_num_exemplars_per_class
+		
 		num_cls = model.task_cls.sum().item()
-		num_exemplars = self.exemplars_dataset.max_num_exemplars
+		num_exemplars = self.max_num_exemplars
 		exemplars_per_class = int(np.ceil(num_exemplars / num_cls))
 		assert exemplars_per_class > 0, \
 			"Not enough exemplars to cover all classes!\n" \
 			"Number of classes so far: {}. " \
 			"Limit of exemplars: {}".format(num_cls,
 											num_exemplars)
-		return exemplars_per_class
+		return exemplars_per_class 
 
 	def _select_indices(self, model: LLL_Net, sel_loader: DataLoader, exemplars_per_class: int, transform,
 						from_inputs=None, clean_memory=False) -> Iterable:
@@ -81,12 +66,20 @@ class HerdingExemplarsSelector(ExemplarsSelector):
 	class based on the distance to the mean sample of that class. From iCaRL algorithm 4 and 5:
 	https://openaccess.thecvf.com/content_cvpr_2017/papers/Rebuffi_iCaRL_Incremental_Classifier_CVPR_2017_paper.pdf
 	"""
-
-	def __init__(self, exemplars_dataset):
-		super().__init__(exemplars_dataset)
+	def __init__(self, exemplars_dataset, max_num_exemplars=1000, max_num_exemplars_per_class=10):
+		super().__init__(
+			exemplars_dataset, 
+			max_num_exemplars=max_num_exemplars, 
+			max_num_exemplars_per_class=max_num_exemplars_per_class
+			)
 
 	def _select_indices(self, model: LLL_Net, sel_loader: DataLoader, exemplars_per_class: int, transform,
 						from_inputs=False, clean_memory=False, alternate=False, step_selection=False) -> Iterable:
+		def format_inputs(device, x):
+			'''transform correct format and move to specified device'''
+			if isinstance(x, (list, tuple)):
+				return [format_inputs(device, xi) for xi in x]
+			return x.to(device)
 		model_device = next(model.parameters()).device  # Assume model is on a single device
 
 		extracted_features = []
@@ -96,11 +89,11 @@ class HerdingExemplarsSelector(ExemplarsSelector):
 		with torch.no_grad():
 			model.eval()
 			for images, targets in sel_loader:
-				images, targets = format_inputs(images, targets)
+				images, targets = format_inputs(model_device, images), format_inputs(model_device, targets)
 				if not from_inputs:
-					logits, feats = model(images, return_features=True)
+					logits, feats, recon_x = model(images, return_features=True)
 					if clean_memory:
-						logits = torch.cat(logits, dim=1)
+						# logits = torch.cat(logits, dim=1)
 						preds = torch.argmax(logits, dim=1)
 						clean_index.extend((targets == preds).cpu().numpy().tolist())
 					feats = feats / feats.norm(dim=1, keepdim=True) 
@@ -159,11 +152,21 @@ class UncertaintyExemplarsSelector(ExemplarsSelector):
 	To adopt Rainbow Memory, use this exemplars selector strategy with "step" option activated
 	"""
 
-	def __init__(self, exemplars_dataset):
-		super().__init__(exemplars_dataset)
+	def __init__(self, exemplars_dataset, max_num_exemplars=1000, max_num_exemplars_per_class=10):
+		super().__init__(
+			exemplars_dataset, 
+			max_num_exemplars=max_num_exemplars, 
+			max_num_exemplars_per_class=max_num_exemplars_per_class
+			)
 
 	def _select_indices(self, model: LLL_Net, sel_loader: DataLoader, exemplars_per_class: int, transform,
 						from_inputs=None, clean_memory=False, alternate=False, step_selection=False) -> Iterable:
+		def format_inputs(device, x):
+			"""将输入数据转换为正确的格式并移动到指定设备"""
+			if isinstance(x, (list, tuple)):
+				return [format_inputs(device, xi) for xi in x]
+			return x.to(device)
+
 		model_device = next(model.parameters()).device  # we assume here that whole model is on a single device
 		
 		# extract outputs from the model for all train samples
@@ -176,14 +179,15 @@ class UncertaintyExemplarsSelector(ExemplarsSelector):
 			model.eval()
 			for images, targets in sel_loader:
 				images = format_inputs(model_device, images)
-				logits = torch.cat(model(images), dim=1)
+				targets = format_inputs(model_device, targets)
+				logits = model(images)
 				if clean_memory:
 					preds = torch.argmax(logits, dim=1)
-					clean_index.extend((targets == preds).detach().numpy().tolist())
-				extracted_logits.append(logits)
-				extracted_targets.extend(targets)
+					clean_index.extend((targets == preds).detach().cpu().numpy().tolist())
+				extracted_logits.append(logits.cpu())
+				extracted_targets.extend(targets.cpu().numpy())
 			
-		extracted_logits = (torch.cat(extracted_logits)).cpu()
+		extracted_logits = torch.cat(extracted_logits, dim=0).cpu()
 		extracted_targets = np.array(extracted_targets)
 		
 		if not len(clean_index):
@@ -225,7 +229,7 @@ class UncertaintyExemplarsSelector(ExemplarsSelector):
 					aug_pred = torch.argmax(aug_logits, dim=1)
 					
 					uncertainty_scores = np.add(uncertainty_scores,
-						[int(x) for x in torch.tensor((aug_pred==lbl)).long()])
+						[int(x) for x in torch.tensor((aug_pred==lbl)).cpu().numpy()])
 
 				uncertainty_scores = [(1-(1/6)*x) for x in uncertainty_scores]
 				sort_index = np.argsort(uncertainty_scores)
