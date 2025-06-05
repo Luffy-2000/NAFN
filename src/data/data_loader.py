@@ -13,14 +13,14 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
     """Extend TaskDataset to support FSCIL memory"""
     def __init__(
         self, 
-        dataset,  # finetune_set = 旧+新 测试集
+        dataset,  # finetune_set = old + new test set
         memory_dataset: Optional[torch.utils.data.Dataset] = None,
         task_transforms: List = None, 
         num_tasks: int = -1,
         memory_selector: str = 'herding',
         shots: int = 5,
         queries: int = 5,
-        ways: int = 5,  # 新类别数量
+        ways: int = 5,  # Number of new classes
         old_class_ids: Optional[List[int]] = None,
         new_class_ids: Optional[List[int]] = None
     ):
@@ -29,7 +29,7 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         self.memory_selector = self._get_memory_selector(memory_selector)
         self.shots = shots
         self.queries = queries
-        self.ways = ways  # 新类别 ways
+        self.ways = ways  # Number of new classes
         self.old_class_ids = old_class_ids
         self.new_class_ids = new_class_ids
         
@@ -58,7 +58,7 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
 
     def sample_task(self):
         '''Build FSCIL task'''
-        #Memory support → 全部旧类 support
+        # Memory support → All old classes support
         if self.memory_dataset is not None and len(self.memory_dataset) > 0:
             memory_x, memory_y = zip(*[self.memory_dataset[i] for i in range(len(self.memory_dataset))])
             memory_x = torch.stack(memory_x)
@@ -67,12 +67,12 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
             memory_x = torch.empty(0)
             memory_y = torch.empty(0, dtype=torch.long)
 
-        # 新类 support → 从 finetune_set 采 new_class_ids + shots per class
+        # New classes support → Sample from finetune_set: new_class_ids + shots per class
         new_support_x, new_support_y = self._sample_new_support()
 
-        # Query set → 从 finetune_set 采：
-        #    - 旧类 query（旧类 id）
-        #    - 新类 query（新类 id）
+        # Query set → Sample from finetune_set:
+        #    - Old classes query (old class ids)
+        #    - New classes query (new class ids)
         old_query_x, old_query_y = self._sample_old_query()
         new_query_x, new_query_y = self._sample_new_query()
 
@@ -84,7 +84,7 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         query_data = torch.cat([old_query_x, new_query_x], dim=0)
         query_labels = torch.cat([old_query_y, new_query_y], dim=0)
 
-        # 返回 Task
+        # Return Task
         x = torch.cat([support_data, query_data], dim=0)
         y = torch.cat([support_labels, query_labels], dim=0)
         return x, y
@@ -92,7 +92,7 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
 
     def _sample_new_support(self):
         '''Sample new class support'''
-        # 从 dataset (finetune_set) 按 new_class_ids 抽样 shots per class
+        # Sample from dataset (finetune_set) by new_class_ids with shots per class
         x_list, y_list = [], []
         for cls in self.new_class_ids:
             cls_indices = [i for i, (_, label) in enumerate(self.dataset) if label.item() == cls]

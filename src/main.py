@@ -63,11 +63,11 @@ def main():
                         help='Temperature parameter for contrastive loss')
     parser.add_argument('--transform-strength', type=float, default=0.8,
                         help='Strength of data augmentation transformations (0-1)')
-    parser.add_argument('--recon-weight', type=float, default=0.5,
+    parser.add_argument('--recon-weight', type=float, default=0.3,
                         help='Weight for reconstruction loss')
-    parser.add_argument('--ce-weight', type=float, default=0.5,
+    parser.add_argument('--ce-weight', type=float, default=0.7,
                         help='Weight for cross-entropy loss')
-    parser.add_argument('--contrastive-weight', type=float, default=0.5,
+    parser.add_argument('--contrastive-weight', type=float, default=0.3,
                         help='Weight for contrastive loss')
     args = parser.parse_args()
     dict_args = vars(args)
@@ -154,7 +154,7 @@ def main():
         EpisodeLoader(memory_task_dataset, num_episodes=args.num_tasks),
         batch_size=None
     )
-    
+
     # Adaptation
     if not args.pt_only or args.ft_only:
         # if not args.is_unsupervised:

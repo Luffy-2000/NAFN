@@ -76,7 +76,7 @@ def compute_confusion_matrix(path, files):
         - files (``list``): A list of file names to read.
     """
     cms = []
-    cms_raw = []  # 存储未归一化的混淆矩阵
+    cms_raw = []  # Store unnormalized confusion matrices
     npz_data = _read_npz_files(path, files)
     labels = npz_data['query_labels']
     logits = npz_data['logits']
@@ -89,12 +89,14 @@ def compute_confusion_matrix(path, files):
         
     for logit, label in zip(logits, labels):
         pred = logit.argmax(dim=1).long()
-        # 计算归一化的混淆矩阵
-        cms.append(metrics.confusion_matrix(label, pred, normalize='true'))
-        # 计算未归一化的混淆矩阵
-        cms_raw.append(metrics.confusion_matrix(label, pred))
+        # Compute normalized confusion matrix
+        cm = metrics.confusion_matrix(label, pred, normalize='true')
+        # Compute unnormalized confusion matrix
+        cm_raw = metrics.confusion_matrix(label, pred)
+        cms.append(cm)
+        cms_raw.append(cm_raw)
     
-    # 返回归一化和未归一化的混淆矩阵
+    # Return both normalized and unnormalized confusion matrices
     return sum(cms) / len(cms), sum(cms_raw) / len(cms_raw)
 
         

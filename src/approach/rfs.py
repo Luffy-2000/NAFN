@@ -93,16 +93,18 @@ class LightningRFS(LightningTLModule):
         # self.pretrained_autoencoder = kwargs.get('pretrained_autoencoder', LightningRFS.pretrained_autoencoder)
         # self.is_unsupervised = kwargs.get('is_unsupervised', LightningRFS.is_unsupervised)
 
+        # Mode: 'recon' or 'contrastive' or 'hybrid'
+        self.mode = kwargs.get('pre_mode', 'none')
+
         # Parameter of contrasctive learning
-        self.mode = kwargs.get('pre_mode', 'none')  # 'recon'或'contrastive'或'hybrid'
         self.temperature = kwargs.get('temperature', 0.5)
         self.transform_strength = kwargs.get('transform_strength', 0.8)
         self.mes_loss = nn.MSELoss()
         self.ntx_loss = NTXentLoss(temperature=self.temperature)
         # 损失权重
-        self.recon_weight = kwargs.get('recon_weight', 0.5)
-        self.ce_weight = kwargs.get('ce_weight', 0.5)
-        self.contrastive_weight = kwargs.get('contrastive_weight', 0.5)
+        self.recon_weight = kwargs.get('recon_weight', 0.2)
+        self.ce_weight = kwargs.get('ce_weight', 0.8)
+        self.contrastive_weight = kwargs.get('contrastive_weight', 0.2)
 
         assert (
             self.alpha + self.gamma == 1.0
@@ -244,6 +246,7 @@ class LightningRFS(LightningTLModule):
                 # 总损失 = 分类损失 + 对比损失
                 loss = self.ce_weight * ce_loss + self.contrastive_weight * contrastive_loss
             elif self.mode == 'hybrid':
+                self.ce_weight, self.recon_weight, self.contrastive_weight = 0.7, 0.15, 0.15
                 # 生成正样本
                 data_aug = self._apply_transform(data, transform_method=0)
                 

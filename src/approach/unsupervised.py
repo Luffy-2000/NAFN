@@ -29,31 +29,31 @@ class NTXentLoss(nn.Module):
         """
         batch_size = z_i.shape[0]
         
-        # 特征归一化
+        # Feature normalization
         z_i = F.normalize(z_i, dim=1)
         z_j = F.normalize(z_j, dim=1)
         
-        # 将特征堆叠为 [2*N, D]
+        # Stack features as [2*N, D]
         features = torch.cat([z_i, z_j], dim=0)
         
-        # 计算相似度矩阵 [2*N, 2*N]
-        similarity_matrix = F.cosine_similarity(features.unsqueeze(1), features.unsqueeze(0), dim=2) / self.temperature
-        # 去除自身的相似度 (对角线元素)
-        mask = torch.eye(2 * batch_size, dtype=bool, device=similarity_matrix.device)    
-        similarity_matrix[mask] = -float('inf')     # [2*N, 2*N]
-        # similarity_matrix = similarity_matrix[~mask].view(2 * batch_size, -1)
-        # print(similarity_matrix.shape)
-        #exit()
-        # 正样本对的索引
-        pos_idx = torch.arange(batch_size, device=similarity_matrix.device)
-
-        pos_idx = torch.cat([pos_idx + batch_size, pos_idx], dim=0)
+        # Compute similarity matrix [2*N, 2*N]
+        similarity_matrix = torch.matmul(features, features.t())
         
-        # 计算对比损失
-        logits = similarity_matrix
-        labels = pos_idx
-
-        loss = self.criterion(logits, labels) / (2 * batch_size)
+        # Remove self-similarity (diagonal elements)
+        similarity_matrix.fill_diagonal_(float('-inf'))
+        
+        # Get positive sample pair indices
+        pos_mask = torch.zeros_like(similarity_matrix)
+        pos_mask[:batch_size, batch_size:] = torch.eye(batch_size)
+        pos_mask[batch_size:, :batch_size] = torch.eye(batch_size)
+        
+        # Compute contrastive loss
+        pos_sim = similarity_matrix[pos_mask.bool()].view(2*batch_size, 1)
+        neg_sim = similarity_matrix[~pos_mask.bool()].view(2*batch_size, -1)
+        logits = torch.cat([pos_sim, neg_sim], dim=1)
+        labels = torch.zeros(2*batch_size, dtype=torch.long, device=logits.device)
+        loss = self.criterion(logits/self.temperature, labels)
+        
         return loss
 
 class LightningUnsupervised(LightningModule):

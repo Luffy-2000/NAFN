@@ -38,25 +38,19 @@ def plot_confusion_matrix(exp_path):
             files=['logits', 'labels']
         )
         
-        # 保存归一化的混淆矩阵
+        # Save normalized confusion matrix
         df_cm = pd.DataFrame(avg_cm)
-        plt.figure(figsize=(15,14))
-        sn.set_theme(font_scale=1.4)
-        p = sn.heatmap(df_cm, fmt='.2f', square=True, vmin=0, vmax=1)
-        p.set(ylabel='True Label', xlabel='Predicted Label')
-        f = p.get_figure()
-        f.savefig(f'{exp_path}/img/cm_{folder}.pdf', bbox_inches="tight")
-        df_cm.to_csv(f'{exp_path}/img/cm_{folder}.csv')
+        plt.figure(figsize=(10, 8))
+        p = sn.heatmap(df_cm, annot=True, fmt='.2f', square=True)
+        plt.savefig(os.path.join(f'{exp_path}/img', 'confusion_matrix.png'))
+        plt.close()
         
-        # 保存未归一化的混淆矩阵
+        # Save unnormalized confusion matrix
         df_cm_raw = pd.DataFrame(avg_cm_raw)
-        plt.figure(figsize=(15,14))
-        sn.set_theme(font_scale=1.4)
-        p = sn.heatmap(df_cm_raw, fmt='d', square=True)  # 使用整数格式
-        p.set(ylabel='True Label', xlabel='Predicted Label')
-        f = p.get_figure()
-        f.savefig(f'{exp_path}/img/cm_{folder}_raw.pdf', bbox_inches="tight")
-        df_cm_raw.to_csv(f'{exp_path}/img/cm_{folder}_raw.csv')
+        plt.figure(figsize=(10, 8))
+        p = sn.heatmap(df_cm_raw, fmt='d', square=True)  # Use integer format
+        plt.savefig(os.path.join(f'{exp_path}/img', 'confusion_matrix_raw.png'))
+        plt.close()
 
 
 def get_metric(exp_path, folders, wanted_metrics, class_pool=None):

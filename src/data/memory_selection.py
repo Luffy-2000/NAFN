@@ -93,7 +93,6 @@ class HerdingExemplarsSelector(ExemplarsSelector):
 				if not from_inputs:
 					logits, feats, recon_x = model(images, return_features=True)
 					if clean_memory:
-						# logits = torch.cat(logits, dim=1)
 						preds = torch.argmax(logits, dim=1)
 						clean_index.extend((targets == preds).cpu().numpy().tolist())
 					feats = feats / feats.norm(dim=1, keepdim=True) 
@@ -109,8 +108,23 @@ class HerdingExemplarsSelector(ExemplarsSelector):
 			clean_index = torch.ones(len(extracted_targets), dtype=torch.bool)
 		else:
 			clean_index = torch.tensor(clean_index, dtype=torch.bool)
-			for i, t in enumerate(extracted_targets):
-				clean_index[i] |= (t in self.already_added_classes)
+			# Ensure at least some samples are kept for each class
+			for curr_cls in torch.unique(extracted_targets):
+				cls_ind = torch.where(extracted_targets == curr_cls)[0]
+				cls_clean = clean_index[cls_ind]
+				if torch.sum(cls_clean) == 0:  # If all samples of this class are filtered out
+					# Select samples with highest prediction probabilities
+					with torch.no_grad():
+						cls_feats = extracted_features[cls_ind]
+						cls_feats = cls_feats.to(model_device)  # Move to same device as model
+						# directly use features, no need to pass through model
+						cls_probs = torch.softmax(model.head(cls_feats), dim=1)
+						# Select top-k samples with highest prediction probabilities
+						k = min(exemplars_per_class, len(cls_ind))
+						_, topk_indices = torch.topk(cls_probs.max(dim=1)[0], k)
+						# Move indices to CPU before indexing
+						topk_indices = topk_indices.cpu()
+						clean_index[cls_ind[topk_indices]] = True
 		
 		result = []
 		
@@ -120,6 +134,7 @@ class HerdingExemplarsSelector(ExemplarsSelector):
 			
 			if exemplars_per_class < len(cls_ind):
 				cls_feats = extracted_features[cls_ind]
+				cls_feats = cls_feats.to(model_device)  # Move to same device as model
 				cls_mu = cls_feats.mean(0)
 				
 				selected = []
@@ -162,7 +177,7 @@ class UncertaintyExemplarsSelector(ExemplarsSelector):
 	def _select_indices(self, model: LLL_Net, sel_loader: DataLoader, exemplars_per_class: int, transform,
 						from_inputs=None, clean_memory=False, alternate=False, step_selection=False) -> Iterable:
 		def format_inputs(device, x):
-			"""将输入数据转换为正确的格式并移动到指定设备"""
+			'''transform correct format and move to specified device'''
 			if isinstance(x, (list, tuple)):
 				return [format_inputs(device, xi) for xi in x]
 			return x.to(device)
