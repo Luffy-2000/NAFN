@@ -63,8 +63,8 @@ def main():
                     f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
                     f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
                     f"--classes-per-set {dataset_configs[dataset]} "
-                    f"--default_root_dir ../results_rfs_teacher_{dataset}_{shot}shot_{pre_mode} "
-                    f"--network UNet1D2D --base-learner nn --pre-mode {pre_mode}"
+                    f"--default_root_dir ../results_rfs_teacher_lr/results_rfs_teacher_{dataset}_{shot}shot_{pre_mode} "
+                    f"--network Autoencoder --base-learner lr --pre-mode {pre_mode}"
                 )
 
                 # Run teacher training
@@ -74,7 +74,7 @@ def main():
                 run_command(teacher_cmd)
 
                 # Find teacher model file
-                teacher_dir = f"../results_rfs_teacher_{dataset}_{shot}shot_{pre_mode}"
+                teacher_dir = f"../results_rfs_teacher_lr/results_rfs_teacher_{dataset}_{shot}shot_{pre_mode}"
                 teacher_model = find_teacher_model(teacher_dir)
 
                 # Build student training command
@@ -85,8 +85,8 @@ def main():
                     f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
                     f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
                     f"--classes-per-set {dataset_configs[dataset]} "
-                    f"--default_root_dir ../results_rfs_student_{dataset}_{shot}shot_{pre_mode} "
-                    f"--network UNet1D2D --base-learner nn --kd-t 1 "
+                    f"--default_root_dir ../results_rfs_student_lr/results_rfs_student_{dataset}_{shot}shot_{pre_mode} "
+                    f"--network Autoencoder --base-learner lr --kd-t 1 "
                     f"--teacher-path {teacher_model} --is-distill"
                 )
 

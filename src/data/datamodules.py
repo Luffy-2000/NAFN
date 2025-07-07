@@ -7,7 +7,7 @@ class PLDataModule(pl.LightningDataModule):
         train_set,
         val_set = None,
         test_set = None,
-        batch_size = 128,
+        batch_size = 64,
         num_workers = 8, 
         pin_memory = True,
      ):

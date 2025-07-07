@@ -132,6 +132,27 @@ class LightningRFS(LightningTLModule):
             # "is_unsupervised": self.is_unsupervised
         })
 
+        # ========== MOCO相关 ==========
+        self.moco_m = 0.999
+        self.moco_K = 4096
+        # 获取特征维度
+        with torch.no_grad():
+            dummy = torch.randn(2, *([1]* (len(next(net.parameters()).shape)-1)))
+            try:
+                _, features, _ = self.net(dummy, return_features=True)
+            except Exception:
+                features = torch.randn(2, 200)
+        self.moco_dim = features.shape[1]
+        # 动量编码器
+        import copy
+        self.moco_encoder = copy.deepcopy(self.net)
+        for param in self.moco_encoder.parameters():
+            param.requires_grad = False
+        # 队列和指针
+        self.register_buffer('moco_queue', torch.randn(self.moco_dim, self.moco_K))
+        self.moco_queue = F.normalize(self.moco_queue, dim=0)
+        self.register_buffer('moco_queue_ptr', torch.zeros(1, dtype=torch.long))
+
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -208,6 +229,28 @@ class LightningRFS(LightningTLModule):
         # Convert back to PyTorch tensor
         return torch.from_numpy(transformed).to(device)
 
+    def _moco_momentum_update_encoder(self):
+        """动量更新编码器参数"""
+        for param_q, param_k in zip(self.net.parameters(), self.moco_encoder.parameters()):
+            param_k.data = param_k.data * self.moco_m + param_q.data * (1. - self.moco_m)
+
+    @torch.no_grad()
+    def _moco_dequeue_and_enqueue(self, keys):
+        """keys: [B, C]，入队并出队"""
+        keys = keys.detach()
+        batch_size = keys.shape[0]
+        ptr = int(self.moco_queue_ptr)
+        K = self.moco_K
+        # 替换队列中的数据
+        if ptr + batch_size <= K:
+            self.moco_queue[:, ptr:ptr + batch_size] = keys.T
+        else:
+            first = K - ptr
+            self.moco_queue[:, ptr:] = keys[:first].T
+            self.moco_queue[:, :batch_size-first] = keys[first:].T
+        ptr = (ptr + batch_size) % K
+        self.moco_queue_ptr[0] = ptr
+
     def pt_step(self, batch, batch_idx, **kwargs):
         data, labels = batch
         if self.is_distill:
@@ -236,15 +279,36 @@ class LightningRFS(LightningTLModule):
                 eval_accuracy = accuracy(student_logits, labels)
                 loss = self.recon_weight * recon_loss + self.ce_weight * ce_loss
             elif self.mode == 'contrastive':
+                # MOCO对比学习
                 data_aug = self._apply_transform(data, transform_method=0)
-                student_logits, features, _ = self.net(data, return_features=True)
-                _ , features_aug, _ = self.net(data_aug, return_features=True)
-
+                student_logits, q, _ = self.net(data, return_features=True)
+                with torch.no_grad():
+                    self._moco_momentum_update_encoder()
+                    _, k, _ = self.moco_encoder(data_aug, return_features=True)
+                q = F.normalize(q, dim=1)
+                k = F.normalize(k, dim=1)         # [B, 320]
+                # 动态适配MOCO队列特征维度
+                if q.shape[1] != self.moco_queue.shape[0]:
+                    device = q.device
+                    self.moco_dim = q.shape[1]
+                    self.moco_queue = torch.randn(self.moco_dim, self.moco_K, device=device)
+                    self.moco_queue = F.normalize(self.moco_queue, dim=0)
+                    self.moco_queue_ptr = torch.zeros(1, dtype=torch.long, device=device)
+                # 正样本
+                l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)  # [B,1]
+                # 负样本
+                queue = self.moco_queue.clone().detach()
+                l_neg = torch.einsum('nc,ck->nk', [q, queue])           # [B,K]
+                logits = torch.cat([l_pos, l_neg], dim=1)               # [B,1+K]
+                logits /= self.temperature
+                labels_con = torch.zeros(logits.shape[0], dtype=torch.long, device=logits.device)
+                contrastive_loss = F.cross_entropy(logits, labels_con)
+                # 入队出队
+                self._moco_dequeue_and_enqueue(k)
                 ce_loss = self.ce_loss(student_logits, labels)
-                contrastive_loss = self.ntx_loss(features, features_aug)
                 eval_accuracy = accuracy(student_logits, labels)
-                # 总损失 = 分类损失 + 对比损失
                 loss = self.ce_weight * ce_loss + self.contrastive_weight * contrastive_loss
+
             elif self.mode == 'hybrid':
                 self.ce_weight, self.recon_weight, self.contrastive_weight = 0.7, 0.15, 0.15
                 # 生成正样本
