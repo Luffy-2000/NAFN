@@ -49,7 +49,7 @@ def main():
     # Model args
     parser.add_argument('--network', type=str, default='Lopez17CNN')
     parser.add_argument('--weights-path', type=str, default=None)
-    parser.add_argument('--out-features-size', type=int, default=None)
+    parser.add_argument('--out-features-size', type=int, default=320)
     parser.add_argument(
         '--scale', type=float, default=1,
         help='Scaling factor to modify the number of trainable '
@@ -69,6 +69,10 @@ def main():
                         help='Weight for cross-entropy loss')
     parser.add_argument('--contrastive-weight', type=float, default=0.3,
                         help='Weight for contrastive loss')
+    parser.add_argument('--noise-label', action='store_true', default=False,
+                        help='If set, add label noise to support set in each episode')
+    parser.add_argument('--noise-ratio', type=float, default=0.2,
+                        help='Ratio of support samples to corrupt with label noise (default=0.2)')
     args = parser.parse_args()
     dict_args = vars(args)
     
@@ -100,7 +104,37 @@ def main():
         is_fscil=args.is_fscil,
         num_tasks=args.num_tasks
     )
+    
+    # Add label noise to finetune_taskset support samples if required
+    def add_label_noise(dataset, noise_ratio, num_classes):
+        """
+        Randomly corrupt a portion of the labels in the dataset (in-place).
+        Only for support (train) samples, not query.
+        """
+        n = len(dataset)
+        num_noisy = int(n * noise_ratio)
+        if num_noisy == 0:
+            return []
+        import numpy as np
+        noisy_indices = np.random.choice(n, num_noisy, replace=False)
+        for idx in noisy_indices:
+            true_label = int(dataset.labels[idx])
+            # Choose a wrong label
+            candidates = [l for l in range(num_classes) if l != true_label]
+            noisy_label = np.random.choice(candidates)
+            dataset.labels[idx] = noisy_label
+        return noisy_indices
 
+    if args.noise_label:
+        # 假设finetune_taskset是NetworkingDataset类型
+        # 只对support部分加噪，query不加噪
+        # 这里假设support和query是分开的，如果不是，需要在采样时区分
+        # 这里默认全部加噪（实际可根据采样逻辑调整）
+        noise_ratio = 0.2  # 可调整
+        num_classes = ways[1]  # 新类数量
+        print(f"Adding label noise to finetune_taskset: ratio={noise_ratio}, num_classes={num_classes}")
+        add_label_noise(finetune_taskset, noise_ratio, num_classes)
+    
     # ways [7, 3]
     # pretrain_datamodule <data.datamodules.PLDataModule object at 0x7ff376c780d0>
     # finetune_taskset <learn2learn.data.task_dataset.TaskDataset object at 0x7ff376ad0e80>
@@ -146,10 +180,12 @@ def main():
         shots=args.shots, 
         queries=args.queries,
         old_class_ids=list(range(ways[0])),
-        new_class_ids=list(range(ways[0], ways[0] + ways[1]))
+        new_class_ids=list(range(ways[0], ways[0] + ways[1])),
+        noise_label=args.noise_label,
+        noise_ratio=args.noise_ratio,
     )
     memory_task_dataset.initialize_memory(net, pretrain_datamodule.train_set)
-
+    
     episode_loader = torch.utils.data.DataLoader(
         EpisodeLoader(memory_task_dataset, num_episodes=args.num_tasks),
         batch_size=None

@@ -2,7 +2,7 @@ import learn2learn as l2l
 from learn2learn.data.transforms import NWays, KShots, LoadData, RemapLabels, ConsecutiveLabels
 import torch
 from typing import List, Tuple, Optional
-
+import numpy as np
 from data import networking_dataset as netdat
 from data.dataset_config import dataset_config
 from data.datamodules import PLDataModule
@@ -22,7 +22,9 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         queries: int = 5,
         ways: int = 5,  # Number of new classes
         old_class_ids: Optional[List[int]] = None,
-        new_class_ids: Optional[List[int]] = None
+        new_class_ids: Optional[List[int]] = None,
+        noise_label: bool = False,
+        noise_ratio: float = 0.0,
     ):
         super().__init__(dataset, task_transforms, num_tasks)
         self.memory_dataset = memory_dataset
@@ -32,7 +34,9 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         self.ways = ways  # Number of new classes
         self.old_class_ids = old_class_ids
         self.new_class_ids = new_class_ids
-        
+        self.noise_label = noise_label
+        self.noise_ratio = noise_ratio
+    
     def _get_memory_selector(self, selector_type: str):
         """Get memory selector based on type"""
         if selector_type == 'herding':
@@ -56,6 +60,24 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         # Wrap memory as TensorDataset
         self.memory_dataset = torch.utils.data.TensorDataset(x, y)
 
+    def add_label_noise_to_tensor(self, y, noise_ratio, num_classes):
+        """
+        Add label noise within each class: for each class, randomly select a portion of samples and change their labels to a wrong class, but keep the number of samples per class unchanged.
+        """
+        y = y.clone()
+        for cls in range(num_classes):
+            cls_indices = (y == cls).nonzero(as_tuple=True)[0]
+            n_cls = len(cls_indices)
+            num_noisy = int(n_cls * noise_ratio)
+            if num_noisy == 0:
+                continue
+            noisy_indices = np.random.choice(cls_indices.cpu(), num_noisy, replace=False)
+            for idx in noisy_indices:
+                candidates = [l for l in range(num_classes) if l != cls]
+                noisy_label = np.random.choice(candidates)
+                y[idx] = noisy_label
+        return y
+
     def sample_task(self):
         '''Build FSCIL task'''
         # Memory support → All old classes support
@@ -69,6 +91,9 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
 
         # New classes support → Sample from finetune_set: new_class_ids + shots per class
         new_support_x, new_support_y = self._sample_new_support()
+        # Add label noise to support set if enabled
+        if self.noise_label and self.noise_ratio > 0:
+            new_support_y = self.add_label_noise_to_tensor(new_support_y, self.noise_ratio, self.ways)
 
         # Query set → Sample from finetune_set:
         #    - Old classes query (old class ids)
@@ -174,15 +199,6 @@ def get_loaders(
         test_set=test_set,
     )
     
-    # # Use MemoryTaskDataset instead of original TaskDataset
-    # finetune_taskset = _get_taskset(
-    #     dataset=finetune_set,
-    #     ways=sum(ways) if is_fscil else ways[1],
-    #     queries=queries,
-    #     shots=shots,
-    #     num_tasks=num_tasks,
-    #     memory_selector=memory_selector
-    # )
     
     return ways, pretrain_datamodule, finetune_set
 

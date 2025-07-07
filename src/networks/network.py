@@ -43,7 +43,7 @@ class LLL_Net(nn.Module):
             return_features (bool): return the representations before the heads
         """
         recon_x, fea = self.model(x)
-        y = self.feat_activation(fea)
+        y = self.head(self.feat_activation(fea))
         return (y, fea, recon_x) if return_features else y
 
     def get_copy(self):

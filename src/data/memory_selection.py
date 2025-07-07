@@ -118,6 +118,7 @@ class HerdingExemplarsSelector(ExemplarsSelector):
 						cls_feats = extracted_features[cls_ind]
 						cls_feats = cls_feats.to(model_device)  # Move to same device as model
 						# directly use features, no need to pass through model
+						print(cls_feats.shape)
 						cls_probs = torch.softmax(model.head(cls_feats), dim=1)
 						# Select top-k samples with highest prediction probabilities
 						k = min(exemplars_per_class, len(cls_ind))
