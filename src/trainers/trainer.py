@@ -21,7 +21,7 @@ class TLTrainer:
         self.dict_args = dict_args
         self.log_path = args.default_root_dir
         self.device = self.args.device
-            
+        self.dataset = dict_args["dataset"]
         self._setup_first_trainer()
         
     def set_finetune_taskset(self, finetune_taskset):
@@ -94,7 +94,7 @@ class TLTrainer:
         return eval_res  
     
     
-    def adaptation(self, approach, dataloader, already_resumed=False):
+    def adaptation(self, approach, dist_calibrator, dataloader, already_resumed=False):
         """ 
         Implementation of the fine-tuning stage with a FSL/FSCIL procedure 
         """
@@ -120,8 +120,7 @@ class TLTrainer:
         for episode in ft_loop:
             # Adaptation step
             episode = [episode[0].to(self.device), episode[1].to(self.device)]
-            output = best_approach.adaptation_step(episode) 
-            
+            output = best_approach.adaptation_step(dist_calibrator, episode) 
             # Collect metrics from the last epoch
             loss = output['loss'].item()
             acc = output['accuracy'].item()
@@ -163,11 +162,13 @@ class TLTrainer:
             wanted_metrics=['f1_all_macro']
         )
         
-        util.logger.plot_confusion_matrix(exp_path=self.trainers[trainer_idx].logger.log_dir)
-        with open(f'{self.trainers[trainer_idx].logger.log_dir}/test_results.json', 'w') as f:
-            json.dump({**eval_res, **f1_scores}, f)
         ci = ClassInfo()
         ci.save_data(self.trainers[trainer_idx].logger.log_dir)
+        
+        util.logger.plot_confusion_matrix(exp_path=self.trainers[trainer_idx].logger.log_dir, dataset = self.dataset)
+        with open(f'{self.trainers[trainer_idx].logger.log_dir}/test_results.json', 'w') as f:
+            json.dump({**eval_res, **f1_scores}, f)
+        
         
         util.cleanup.cleanup_distill_models(self.trainers[trainer_idx].logger.log_dir)
         # WARNING: it deletes all the adaptation feature vectors 

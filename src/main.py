@@ -14,7 +14,9 @@ from approach import (
     LightningTLModule,
     LightningUnsupervised
 )
-
+from modules.Distribution import RepresentationDistributionCalibrator
+import numpy as np
+from torch.utils.data import DataLoader
 
 def main():
     ####
@@ -71,8 +73,10 @@ def main():
                         help='Weight for contrastive loss')
     parser.add_argument('--noise-label', action='store_true', default=False,
                         help='If set, add label noise to support set in each episode')
-    parser.add_argument('--noise-ratio', type=float, default=0.2,
+    parser.add_argument('--noise-ratio', type=float, default=0.0,
                         help='Ratio of support samples to corrupt with label noise (default=0.2)')
+    parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF'],
+                        help='Denoising method for support set: none (no denoising), LOF (Local Outlier Factor), IF (Isolation Forest)')
     args = parser.parse_args()
     dict_args = vars(args)
     
@@ -105,36 +109,6 @@ def main():
         num_tasks=args.num_tasks
     )
     
-    # Add label noise to finetune_taskset support samples if required
-    def add_label_noise(dataset, noise_ratio, num_classes):
-        """
-        Randomly corrupt a portion of the labels in the dataset (in-place).
-        Only for support (train) samples, not query.
-        """
-        n = len(dataset)
-        num_noisy = int(n * noise_ratio)
-        if num_noisy == 0:
-            return []
-        import numpy as np
-        noisy_indices = np.random.choice(n, num_noisy, replace=False)
-        for idx in noisy_indices:
-            true_label = int(dataset.labels[idx])
-            # Choose a wrong label
-            candidates = [l for l in range(num_classes) if l != true_label]
-            noisy_label = np.random.choice(candidates)
-            dataset.labels[idx] = noisy_label
-        return noisy_indices
-
-    if args.noise_label:
-        # 假设finetune_taskset是NetworkingDataset类型
-        # 只对support部分加噪，query不加噪
-        # 这里假设support和query是分开的，如果不是，需要在采样时区分
-        # 这里默认全部加噪（实际可根据采样逻辑调整）
-        noise_ratio = 0.2  # 可调整
-        num_classes = ways[1]  # 新类数量
-        print(f"Adding label noise to finetune_taskset: ratio={noise_ratio}, num_classes={num_classes}")
-        add_label_noise(finetune_taskset, noise_ratio, num_classes)
-    
     # ways [7, 3]
     # pretrain_datamodule <data.datamodules.PLDataModule object at 0x7ff376c780d0>
     # finetune_taskset <learn2learn.data.task_dataset.TaskDataset object at 0x7ff376ad0e80>
@@ -150,6 +124,7 @@ def main():
     if args.patience == -1:
         args.patience = float('inf')
         
+    
     approach = LightningTLModule.factory_approach(
         args.approach, net, **dict_args)
     
@@ -176,7 +151,7 @@ def main():
         dataset=finetune_taskset,
         memory_dataset = pretrain_datamodule.train_set, 
         memory_selector=args.memory_selector, 
-        ways=ways[1],  # 新类数量
+        ways=ways[1],  # the number of new classes
         shots=args.shots, 
         queries=args.queries,
         old_class_ids=list(range(ways[0])),
@@ -185,7 +160,28 @@ def main():
         noise_ratio=args.noise_ratio,
     )
     memory_task_dataset.initialize_memory(net, pretrain_datamodule.train_set)
-    
+
+    dist_calibrator = RepresentationDistributionCalibrator(top_q=3, gamma=0.7, alpha=1e-2)
+    # === Recording distribution of base classes===
+    # print('Extracting features and recording base class distributions...')
+    memory_features = []
+    memory_labels = []
+    loader = DataLoader(pretrain_datamodule.train_set, batch_size=128, shuffle=False, num_workers=4)
+    net.eval()
+    with torch.no_grad():
+        for i, (x, y) in enumerate(loader):
+            x = x.to(args.device)
+            _, feat, _ = net(x, return_features=True)
+            memory_features.append(feat.cpu().numpy())
+            memory_labels.append(y.cpu().numpy())
+    memory_features = np.concatenate(memory_features, axis=0)
+    memory_labels = np.concatenate(memory_labels, axis=0)
+    print('Recording class distributions...')
+    for cls in np.unique(memory_labels):
+        cls_feats = memory_features[memory_labels == cls]
+        dist_calibrator.update_class_distribution(int(cls), cls_feats)
+    print('Base class distributions recorded.')
+    # === base class distributions recorded ===
     episode_loader = torch.utils.data.DataLoader(
         EpisodeLoader(memory_task_dataset, num_episodes=args.num_tasks),
         batch_size=None
@@ -194,7 +190,7 @@ def main():
     # Adaptation
     if not args.pt_only or args.ft_only:
         # if not args.is_unsupervised:
-            ft_res = tl_trainer.adaptation(approach=approach, dataloader=episode_loader)
+            ft_res = tl_trainer.adaptation(approach=approach, dist_calibrator=dist_calibrator ,dataloader=episode_loader)
             # print(f"ft_res: {ft_res}")
             eval_res = {**eval_res, **ft_res}
     tl_trainer.save_results(eval_res)

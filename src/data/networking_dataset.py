@@ -76,7 +76,6 @@ def _dataset_from_labels(x, y, class_set, indices=None, augs='', return_xy=False
         class_set = torch.tensor([])
     
     class_mask = (y[:, None] == class_set[None, :]).any(dim=-1)
-
     if isinstance(x, list):
         x = [e for e, m in zip(x, class_mask) if m]
     else:
@@ -239,20 +238,17 @@ def split(
     full_path = dc['path']
     label_column = dc.get('label_column', 'LABEL')
 
-
     fs_split = util._shuffle_dict_classes(dc['fs_split']) if shuffle_classes else dc['fs_split']
 
-    
     x, y, _ = util._get_x_y(full_path, num_pkts, fields, label_column, seed)
 
     # Split classes
     classes = _class_split(fs_split, classes_per_set)   # {'trn': tensor([2, 7, 0, 6, 4, 3, 9]), 'val': None, 'tst': tensor([5, 1, 8])}
 
     x_pt, y_pt =  _dataset_from_labels(x, y, classes['trn'], return_xy=True) 
+
     pt_ways = len(classes['trn'])
     ft_ways = len(classes['tst'])
-
-
 
     if is_fscil:
         train_set, val_set, test_set = _balanced_hold_out(x_pt, y_pt, seed, enc=True)

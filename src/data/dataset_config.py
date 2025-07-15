@@ -18,7 +18,7 @@ class ClassInfo:
             
 
 dataset_config = {
-    'iot_nid': {  
+    'iot_nid': {
         'path': join(_BASE_DATA_PATH, 'iot_nid',
                      'iot-nidd_100pkts_6f_clean.parquet'),
         'class_order': [2, 7, 0, 6, 4, 3, 9, 5, 1, 8],  

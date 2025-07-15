@@ -181,8 +181,8 @@ class LightningTLModule(LightningModule):
         )
         return outputs
     
-    def adaptation_step(self, batch):
-        outputs = self.ft_step(batch)
+    def adaptation_step(self, dist_calibrator, batch):
+        outputs = self.ft_step(dist_calibrator, batch)
         return outputs
     
     ####

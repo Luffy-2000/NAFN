@@ -8,6 +8,7 @@ from data.dataset_config import dataset_config
 from data.datamodules import PLDataModule
 from data.memory_selection import HerdingExemplarsSelector, UncertaintyExemplarsSelector
 import random
+import copy
 
 class MemoryTaskDataset(l2l.data.TaskDataset):
     """Extend TaskDataset to support FSCIL memory"""
@@ -53,30 +54,28 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         selector = self.memory_selector(train_set, max_num_exemplars=1000, max_num_exemplars_per_class=self.shots)
         x, y = selector(
             model=model,
-            trn_loader=torch.utils.data.DataLoader(train_set, batch_size=32),
+            trn_loader=torch.utils.data.DataLoader(train_set, batch_size=8),
             transform=None,
             clean_memory=True,
         )
         # Wrap memory as TensorDataset
         self.memory_dataset = torch.utils.data.TensorDataset(x, y)
 
-    def add_label_noise_to_tensor(self, y, noise_ratio, num_classes):
+    def add_label_noise_to_tensor(self, y, noise_ratio):
         """
         Add label noise within each class: for each class, randomly select a portion of samples and change their labels to a wrong class, but keep the number of samples per class unchanged.
         """
         y = y.clone()
-        for cls in range(num_classes):
-            cls_indices = (y == cls).nonzero(as_tuple=True)[0]
-            n_cls = len(cls_indices)
-            num_noisy = int(n_cls * noise_ratio)
-            if num_noisy == 0:
-                continue
-            noisy_indices = np.random.choice(cls_indices.cpu(), num_noisy, replace=False)
-            for idx in noisy_indices:
-                candidates = [l for l in range(num_classes) if l != cls]
-                noisy_label = np.random.choice(candidates)
-                y[idx] = noisy_label
+        y = y.reshape(len(self.new_class_ids), self.shots)
+        num_noisy = int(self.shots * noise_ratio)
+        num_correct = self.shots - num_noisy
+        y_correct = y[:, :num_correct]
+        y_noisy = y[:, num_correct:]
+        y_noisy = y_noisy.reshape(-1)[torch.randperm(y_noisy.numel())].reshape(len(self.new_class_ids), num_noisy)
+        y = torch.cat([y_correct, y_noisy], dim=1)
+        y = y.reshape(-1)
         return y
+
 
     def sample_task(self):
         '''Build FSCIL task'''
@@ -92,9 +91,10 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         # New classes support → Sample from finetune_set: new_class_ids + shots per class
         new_support_x, new_support_y = self._sample_new_support()
         # Add label noise to support set if enabled
+        
         if self.noise_label and self.noise_ratio > 0:
-            new_support_y = self.add_label_noise_to_tensor(new_support_y, self.noise_ratio, self.ways)
-
+            new_support_y = self.add_label_noise_to_tensor(new_support_y, self.noise_ratio)
+        
         # Query set → Sample from finetune_set:
         #    - Old classes query (old class ids)
         #    - New classes query (new class ids)
@@ -104,16 +104,17 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         # Merge support
         support_data = torch.cat([memory_x, new_support_x], dim=0)
         support_labels = torch.cat([memory_y, new_support_y], dim=0)
-
         # Merge query
         query_data = torch.cat([old_query_x, new_query_x], dim=0)
         query_labels = torch.cat([old_query_y, new_query_y], dim=0)
-
+        # Shuffle query
+        perm = torch.randperm(query_data.size(0))
+        query_data = query_data[perm]
+        query_labels = query_labels[perm]
         # Return Task
         x = torch.cat([support_data, query_data], dim=0)
         y = torch.cat([support_labels, query_labels], dim=0)
         return x, y
-        # return task
 
     def _sample_new_support(self):
         '''Sample new class support'''
@@ -198,8 +199,6 @@ def get_loaders(
         val_set=val_set,
         test_set=test_set,
     )
-    
-    
     return ways, pretrain_datamodule, finetune_set
 
 def _get_taskset(dataset, ways, queries, shots, num_tasks, memory_selector='herding'):
