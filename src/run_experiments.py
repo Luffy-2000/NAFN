@@ -43,6 +43,8 @@ def main():
                       help='Number of shots to try')
     parser.add_argument('--pre-modes', nargs='+', default=['none', 'recon', 'contrastive', 'hybrid'],
                       help='Pre-training modes to try')
+    parser.add_argument('--classifier', nargs='+', default=['nn', 'lr'],
+                      help='Pre-training modes to try')            
     args = parser.parse_args()
 
     # Dataset configuration
@@ -55,46 +57,49 @@ def main():
     for dataset in args.datasets:
         for shot in args.shots:
             for pre_mode in args.pre_modes:
-                # Build teacher training command
-                teacher_cmd = (
-                    f"python3 main.py --is-fscil --dataset {dataset} "
-                    f"--fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots {shot} "
-                    f"--queries 40 --gpus 1 --num-tasks 100 --max_epochs 200 --seed 0 "
-                    f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
-                    f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
-                    f"--classes-per-set {dataset_configs[dataset]} "
-                    f"--default_root_dir ../results_rfs_teacher_lr/results_rfs_teacher_{dataset}_{shot}shot_{pre_mode} "
-                    f"--network Autoencoder --base-learner lr --pre-mode {pre_mode}"
-                )
+                for classifier in args.classifier:
+                    # Build teacher training command
+                    teacher_cmd = (
+                        f"python3 main.py --is-fscil --dataset {dataset} "
+                        f"--fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots {shot} "
+                        f"--queries 40 --gpus 1 --num-tasks 5 --max_epochs 1 --seed 0 "
+                        f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
+                        f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
+                        f"--classes-per-set {dataset_configs[dataset]} "
+                        f"--default_root_dir ../results_rfs_teacher_uncertainty/results_rfs_teacher_{dataset}_{shot}shot_{pre_mode}_{classifier}_uncertainty "
+                        f"--network UNet1D2D --base-learner {classifier} --pre-mode {pre_mode} "
+                        f"--noise-label --noise-ratio 0.5 --denoising LOF --memory-selector uncertainty"
+                    )
 
-                # Run teacher training
-                print(f"\n{'='*50}")
-                print(f"Running teacher training for {dataset} with {shot} shots and {pre_mode} pre-mode")
-                print(f"{'='*50}\n")
-                run_command(teacher_cmd)
+                    # Run teacher training
+                    print(f"\n{'='*50}")
+                    print(f"Running teacher training for {dataset} with {shot} shots and {pre_mode} pre-mode")
+                    print(f"{'='*50}\n")
+                    run_command(teacher_cmd)
 
-                # Find teacher model file
-                teacher_dir = f"../results_rfs_teacher_lr/results_rfs_teacher_{dataset}_{shot}shot_{pre_mode}"
-                teacher_model = find_teacher_model(teacher_dir)
+                    # Find teacher model file
+                    teacher_dir = f"../results_rfs_teacher_uncertainty/results_rfs_teacher_{dataset}_{shot}shot_{pre_mode}_{classifier}_uncertainty"
+                    teacher_model = find_teacher_model(teacher_dir)
 
-                # Build student training command
-                student_cmd = (
-                    f"python3 main.py --is-fscil --dataset {dataset} "
-                    f"--fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots {shot} "
-                    f"--queries 40 --gpus 1 --num-tasks 100 --max_epochs 200 --seed 0 "
-                    f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
-                    f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
-                    f"--classes-per-set {dataset_configs[dataset]} "
-                    f"--default_root_dir ../results_rfs_student_lr/results_rfs_student_{dataset}_{shot}shot_{pre_mode} "
-                    f"--network Autoencoder --base-learner lr --kd-t 1 "
-                    f"--teacher-path {teacher_model} --is-distill"
-                )
+                    # Build student training command
+                    student_cmd = (
+                        f"python3 main.py --is-fscil --dataset {dataset} "
+                        f"--fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots {shot} "
+                        f"--queries 40 --gpus 1 --num-tasks 20 --max_epochs 1 --seed 0 "
+                        f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
+                        f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
+                        f"--classes-per-set {dataset_configs[dataset]} "
+                        f"--default_root_dir ../results_rfs_student_uncertainty/results_rfs_student_{dataset}_{shot}shot_{pre_mode}_{classifier}_uncertainty "
+                        f"--network UNet1D2D --base-learner {classifier} --kd-t 1 "
+                        f"--teacher-path {teacher_model} --is-distill --memory-selector uncertainty"
+                        # f"--noise-label --noise-ratio 0.5 --denoising LOF --memory-selector random""
+                    )
 
-                # Run student training
-                print(f"\n{'='*50}")
-                print(f"Running student training for {dataset} with {shot} shots and {pre_mode} pre-mode")
-                print(f"{'='*50}\n")
-                run_command(student_cmd)
+                    # Run student training
+                    print(f"\n{'='*50}")
+                    print(f"Running student training for {dataset} with {shot} shots and {pre_mode} pre-mode")
+                    print(f"{'='*50}\n")
+                    run_command(student_cmd)
 
 if __name__ == "__main__":
     main()

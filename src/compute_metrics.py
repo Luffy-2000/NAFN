@@ -15,7 +15,7 @@ import util.logger
 default_metrics = [ 'acc', 'sc', 'db', 'f1_all_macro', 'f1_all_micro']
 fscil_metric = ['f1_new_macro', 'f1_new_micro', 'f1_old_macro', 'f1_old_micro']
 exp_args = [
-    'shots', 'queries', 'pre_mode','network', 'fields', 'num_pkts', 'seed', 'dataset'
+    'shots', 'queries', 'pre_mode','network', 'fields', 'num_pkts', 'seed', 'dataset', 'base_learner', 'noise_label', 'noise_ratio'
 ]
 
 def compute_train_time(path):

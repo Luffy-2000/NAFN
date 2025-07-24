@@ -54,7 +54,7 @@ def plot_confusion_matrix(exp_path, dataset):
     """
     # 加载类名与旧类数量
     classes_info_path = os.path.join(exp_path, 'classes_info.json')
-    label_conv_path = f'../data/{dataset}/classes_map.txt'  # 路径视项目结构可能需要调整
+    label_conv_path = f'../data/{dataset}/classes_map_rename.txt'  # 路径视项目结构可能需要调整
     labels, line_x = load_label_names(classes_info_path, label_conv_path)
     print("labels:", labels)
     print("line_x:", line_x)

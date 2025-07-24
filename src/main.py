@@ -38,8 +38,8 @@ def main():
     parser.add_argument('--classes-per-set', type=int, default=[], nargs='+')
     parser.add_argument('--shuffle-classes', action='store_true', default=False)
     parser.add_argument('--memory-selector', type=str, default='herding',
-                      choices=['herding', 'uncertainty'],
-                      help='Memory selector type for FSCIL (herding or uncertainty)')
+                      choices=['herding', 'uncertainty', 'random'],
+                      help='Memory selector type for FSCIL (herding, uncertainty, random)')
     # Exp args
     parser.add_argument('--is-fscil', action='store_true', default=False)
     parser.add_argument(

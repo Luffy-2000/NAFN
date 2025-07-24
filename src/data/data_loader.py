@@ -10,6 +10,34 @@ from data.memory_selection import HerdingExemplarsSelector, UncertaintyExemplars
 import random
 import copy
 
+
+class RandomExemplarsSelector:
+    """Randomly select exemplars for each class."""
+    def __init__(self, dataset, max_num_exemplars=1000, max_num_exemplars_per_class=5):
+        self.dataset = dataset
+        self.max_num_exemplars = max_num_exemplars
+        self.max_num_exemplars_per_class = max_num_exemplars_per_class
+
+    def __call__(self, model=None, trn_loader=None, transform=None, clean_memory=True):
+        # Collect all class labels
+        from collections import defaultdict
+        import random
+        class_indices = defaultdict(list)
+        for idx, (_, label) in enumerate(self.dataset):
+            class_indices[label.item()].append(idx)
+        x_list, y_list = [], []
+        for cls, indices in class_indices.items():
+            n = min(self.max_num_exemplars_per_class, len(indices))
+            selected = random.sample(indices, n)
+            for i in selected:
+                x, y = self.dataset[i]
+                x_list.append(torch.tensor(x))
+                y_list.append(y)
+        x_tensor = torch.stack(x_list)
+        y_tensor = torch.tensor(y_list)
+        return x_tensor, y_tensor
+
+
 class MemoryTaskDataset(l2l.data.TaskDataset):
     """Extend TaskDataset to support FSCIL memory"""
     def __init__(
@@ -44,6 +72,8 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
             return HerdingExemplarsSelector
         elif selector_type == 'uncertainty':
             return UncertaintyExemplarsSelector
+        elif selector_type == 'random':
+            return RandomExemplarsSelector
         else:
             raise ValueError(f"Unknown memory selector type: {selector_type}")
 
