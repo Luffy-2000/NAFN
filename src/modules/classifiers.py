@@ -84,6 +84,13 @@ def LR(x_support, y_support, x_query):
     x_query = nn.functional.normalize(
         x_query, p=2, dim=1).detach().cpu().numpy()
     
-    y_pred = classifier.predict(x_query)
+    # Get softmax probabilities
+    y_probs = classifier.predict_proba(x_query)  # shape = [n_query, n_classes]
+    y_pred = np.argmax(y_probs, axis=1)
+
+    # Convert to torch
+    soft_values = torch.tensor(y_probs, dtype=torch.float32)
+    y_pred = torch.tensor(y_pred, dtype=torch.long)
+
     # Returns the predicted labels
-    return y_pred
+    return soft_values, y_pred

@@ -109,10 +109,10 @@ class HerdingExemplarsSelector(ExemplarsSelector):
                 #     topk_scores, topk_idxs = probs[:, cls].topk(min(exemplars_per_class, len(raw_cls_indices)))
                 #     cls_indices = raw_cls_indices[topk_idxs.cpu()]
             if len(cls_indices) < exemplars_per_class:
-                deficit = exemplars_per_class - len(cls_indices)  # ★修改
-                raw_cls_indices = torch.where(targets == cls)[0]   # ★修改
-                extra = raw_cls_indices[torch.randint(len(raw_cls_indices), (deficit,))]  # ★修改
-                cls_indices = torch.cat([cls_indices, extra])      # ★修改
+                deficit = exemplars_per_class - len(cls_indices)  # ★modified
+                raw_cls_indices = torch.where(targets == cls)[0]   # ★modified
+                extra = raw_cls_indices[torch.randint(len(raw_cls_indices), (deficit,))]  # ★modified
+                cls_indices = torch.cat([cls_indices, extra])      # ★modified
 
 
             cls_feats = features[cls_indices].to(model_device)
@@ -121,7 +121,7 @@ class HerdingExemplarsSelector(ExemplarsSelector):
                 sel_local = self._herding(cls_feats, exemplars_per_class)
                 chosen = cls_indices[sel_local]
             else:
-                chosen = cls_indices  # ★修改：直接用补齐后的索引
+                chosen = cls_indices  # ★modified: directly use the supplemented indices
         
             selected_indices.extend(chosen.tolist())
 

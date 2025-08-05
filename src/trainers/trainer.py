@@ -166,6 +166,7 @@ class TLTrainer:
         ci.save_data(self.trainers[trainer_idx].logger.log_dir)
         
         util.logger.plot_confusion_matrix(exp_path=self.trainers[trainer_idx].logger.log_dir, dataset = self.dataset)
+        
         with open(f'{self.trainers[trainer_idx].logger.log_dir}/test_results.json', 'w') as f:
             json.dump({**eval_res, **f1_scores}, f)
         

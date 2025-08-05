@@ -5,7 +5,7 @@ import os
 import pyarrow.parquet as pq
 import numpy as np
 
-# 类别名称映射
+# Class name mapping
 name = {
     "CSE-CIC-IDS2018":["DoS GoldenEye", "DoS Hulk", "DDoS HOIC", "Bot", "Bruteforce-SSH", "Benign", "DDoS LOIC-HTTP", "DoS Slowloris", "Bruteforce-Web", "DDoS LOIC-UDP", "Bruteforce-XSS", "SQL Injection"],
     "IoT-NID":["Benign", "DoS SYN Flooding", "Mirai ACK Flooding", "Port Scanning", "Mirai HTTP Flooding", "Host Discovery", "Mirai UDP Flooding", "OS Detection", "MITM ARP Spoofing", "Mirai Host Bruteforce"],

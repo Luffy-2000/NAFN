@@ -25,7 +25,7 @@ class NTXentLoss(nn.Module):
         
     def forward(self, z_i, z_j):
         """
-        z_i, z_j: 两个视角的特征表示 [N, D]
+        z_i, z_j: feature representations from two views [N, D]
         """
         batch_size = z_i.shape[0]
         
@@ -80,17 +80,17 @@ class LightningUnsupervised(LightningModule):
         self.t0 = kwargs.get('t0', LightningUnsupervised.t0)
         self.eta_min = kwargs.get('eta_min', LightningUnsupervised.eta_min)
 
-        # 对比学习参数
+        # Contrastive learning parameters
         self.mode = kwargs.get('pre_mode', 'recon')  # 'recon'or'contrastive'or'hybrid'
         self.temperature = kwargs.get('temperature', 0.5)
         self.transform_strength = kwargs.get('transform_strength', 0.8)
         
-        # 损失权重
+        # Loss weights
         self.recon_weight = kwargs.get('recon_weight', 0.5)
         self.ce_weight = kwargs.get('ce_weight', 0.5)
         self.contrastive_weight = kwargs.get('contrastive_weight', 0.5)
 
-        # EMA参数
+        # EMA parameters
         self.ema_decay = kwargs.get('ema_decay', 0.999)
 
         if self.lr_strat == 'none':
@@ -121,7 +121,7 @@ class LightningUnsupervised(LightningModule):
     #     return self.copy_net(x)
     
     def _update_ema(self):
-        """使用EMA更新目标模型的参数"""
+        """Update target model parameters using EMA"""
         with torch.no_grad():
             for param_q, param_k in zip(self.net.parameters(), self.copy_net.parameters()):
                 param_k.data = param_k.data * self.ema_decay + param_q.data * (1. - self.ema_decay)

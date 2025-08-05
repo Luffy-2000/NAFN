@@ -9,7 +9,7 @@ import pandas as pd
 df = pd.read_parquet('/home/zhaozijian/fscil-nids-main-git/data/cic2018/cic2018_dataset_df_no_obf_20pkts_6feats_median_sampled_no_infiltration_clean_330ts.parquet')
 
 
-print("读取完成")
+print("Reading completed")
 exit()
 # Select fields to plot
 # fields = [col for col in df.columns if col.startswith('SCALED_')]

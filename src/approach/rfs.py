@@ -103,10 +103,11 @@ class LightningRFS(LightningTLModule):
         self.transform_strength = kwargs.get('transform_strength', 0.8)
         self.mes_loss = nn.MSELoss()
         self.ntx_loss = NTXentLoss(temperature=self.temperature)
-        # 损失权重
+        # Loss weights
         self.recon_weight = kwargs.get('recon_weight', 0.2)
         self.ce_weight = kwargs.get('ce_weight', 0.8)
         self.contrastive_weight = kwargs.get('contrastive_weight', 0.2)
+        self.noise_ratio = kwargs.get('noise_ratio', 0.0)
 
         assert (
             self.alpha + self.gamma == 1.0
@@ -133,17 +134,17 @@ class LightningRFS(LightningTLModule):
             "teacher_path": self.teacher_path,
             "base_learner": self.base_learner,
             "pre_mode": self.mode,
-            "denoising": self.denoising
-
+            "denoising": self.denoising,
+            "noise_ratio": self.noise_ratio
             # "pretrained_autoencoder": self.pretrained_autoencoder,
             # "is_unsupervised": self.is_unsupervised
         })
 
-        # ========== MOCO相关 ==========
+        # ========== MOCO related ==========
         self.moco_m = 0.999
         self.moco_K = 4096
         self.moco_dim = 320
-        # Momentum encode
+        # Momentum encoder
         self.moco_encoder = copy.deepcopy(self.net)
         for param in self.moco_encoder.parameters():
             param.requires_grad = False
@@ -362,20 +363,20 @@ class LightningRFS(LightningTLModule):
         old_class_ids = set(range(self.num_old_classes))
         new_class_ids = set(range(self.num_old_classes, self.num_old_classes + self.num_new_classes))
         mask = torch.zeros_like(support_labels, dtype=torch.bool)
-        # 合并LOF/IF分支，减少重复
+        # Merge LOF/IF branches to reduce duplication
         if self.denoising in ['LOF', 'IF']:
             if self.denoising == 'LOF':
                 from sklearn.neighbors import LocalOutlierFactor
                 def get_scores(model, emb):
                     model.fit(emb)
                     return model.negative_outlier_factor_
-                OutlierModel = lambda: LocalOutlierFactor(n_neighbors=5, contamination=0.3)
+                OutlierModel = lambda: LocalOutlierFactor(n_neighbors=5, contamination=self.noise_ratio)
             else:
                 from sklearn.ensemble import IsolationForest
                 def get_scores(model, emb):
                     model.fit(emb)
                     return model.decision_function(emb)
-                OutlierModel = lambda: IsolationForest(contamination=0.3, random_state=42)
+                OutlierModel = lambda: IsolationForest(contamination=self.noise_ratio, random_state=42)
             for cls in np.unique(support_labels_np):
                 idx = (support_labels_np == cls)
                 idx_tensor = torch.from_numpy(idx).to(device)
@@ -403,8 +404,8 @@ class LightningRFS(LightningTLModule):
         # === End of denoising ===
 
         if self.denoising in ['LOF', 'IF']:
-            # === 记录新类分布并校准补充 ===
-            # 需要self.dist_calibrator和self.num_old_classes, self.num_new_classes
+            # === Record new class distribution and calibrate and supplement ===
+            # Need self.dist_calibrator and self.num_old_classes, self.num_new_classes
             new_class_ids = set(range(self.num_old_classes, self.num_old_classes + self.num_new_classes))
             new_support_features = []
             new_support_labels = []
@@ -413,33 +414,35 @@ class LightningRFS(LightningTLModule):
                 if np.sum(idx) == 0:
                     continue
                 features = s_embeddings[idx].detach().cpu().numpy()
-                # 记录新类分布
+                # Record new class distribution
                 self.dist_calibrator.update_class_distribution(int(cls), features)
-                # 校准新类分布
+                # Calibrate new class distribution
                 mu, sigma = self.dist_calibrator.calibrate(int(cls), features)
-                # 采样补充特征
-                # n_samples = max(1, int(0.3 * features.shape[0]))  # 补充30%样本
+                # Sample and supplement features
+                # n_samples = max(1, int(0.3 * features.shape[0]))  # Supplement 30% samples
                 samples, labels = self.dist_calibrator.sample_from_class(int(cls), n_outliers)
                 new_support_features.append(samples)
                 new_support_labels.append(labels)
             if new_support_features:
                 new_support_features = np.concatenate(new_support_features, axis=0)
                 new_support_labels = np.concatenate(new_support_labels, axis=0)
-                # 拼接到support set
+                # Concatenate to support set
                 s_embeddings = torch.cat([s_embeddings, torch.tensor(new_support_features, device=s_embeddings.device, dtype=s_embeddings.dtype)], dim=0)
                 support_labels = torch.cat([support_labels, torch.tensor(new_support_labels, device=support_labels.device, dtype=support_labels.dtype)], dim=0)
-            # === 新类分布校准与补充结束 ===
+            # === End of new class distribution calibration and supplement ===
 
 
 
         if self.base_learner == 'lr':
             # Logistic Regressor used to classify the query feats 
-            y_pred = LR(
+            soft_values, y_pred = LR(
                 x_support=s_embeddings, 
                 y_support=support_labels, 
                 x_query=q_embeddings,
             )
-            y_pred = torch.tensor(y_pred)
+            soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
+            eval_loss = self.nl_loss(soft_values.log(), query_labels)
+            # y_pred = torch.tensor(y_pred)
            
         elif self.base_learner == 'nn':
             # Nearest-neighbour used to classify the query feats
@@ -454,12 +457,12 @@ class LightningRFS(LightningTLModule):
         else:
             ValueError('Bad base learner')
            
-        if self.base_learner == 'lr': 
-            # Since 'lr' and 'h' do not produce soft values, 
-            # one-hot encoding of predictions is performed.
-            soft_values = torch.nn.functional.one_hot(y_pred, num_classes=way)  
-            assert torch.equal(y_pred, torch.argmax(soft_values, dim=1))
-            eval_loss = torch.zeros(1)
+        # if self.base_learner == 'lr': 
+        #     # Since 'lr' and 'h' do not produce soft values, 
+        #     # one-hot encoding of predictions is performed.
+        #     soft_values = torch.nn.functional.one_hot(y_pred, num_classes=way)  
+        #     assert torch.equal(y_pred, torch.argmax(soft_values, dim=1))
+        #     eval_loss = torch.zeros(1)
         
         y_pred = y_pred.to(self._device)
         query_accuracy = (y_pred == query_labels).sum().float() / y_pred.size(0)  

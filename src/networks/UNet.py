@@ -47,7 +47,7 @@ class Up(nn.Module):
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
-        # 拼接
+        # Concatenate
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
 

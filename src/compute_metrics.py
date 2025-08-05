@@ -49,7 +49,7 @@ def get_metric_dataframe(exp_path):
             with open(args_path) as f:
                 dict_args = json.load(f)
                 
-            # 提取版本号
+            # Extract version number
             version_match = re.search(r'version_(\d+)', str(args_path))
             if version_match:
                 data['version'] = int(version_match.group(1))

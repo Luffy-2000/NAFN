@@ -10,7 +10,7 @@ import util.metrics
 import util.logger
 
 def compute_train_time(exp_path):
-    """计算训练时间（改为从 version_x 中读取）"""
+    """Calculate training time (changed to read from version_x)"""
     try:
         version_dirs = sorted(Path(exp_path).glob('lightning_logs/version_*'))
         if not version_dirs:
@@ -33,7 +33,7 @@ def compute_train_time(exp_path):
 
 
 def get_metric(exp_path, data, wanted_metrics, class_pool, folders):    
-    """读取 adaptation_data / pt_test_data 指标"""
+    """Read adaptation_data / pt_test_data metrics"""
     try:
         version_dirs = sorted(Path(exp_path).glob('lightning_logs/version_*'))
         if not version_dirs:
@@ -58,7 +58,7 @@ def get_metric(exp_path, data, wanted_metrics, class_pool, folders):
 
 
 def extract_experiment_info(folder_path):
-    """从文件夹名称中提取实验信息"""
+    """Extract experiment information from folder name"""
     folder_name = os.path.basename(folder_path)
     parts = folder_name.split('_')
 
@@ -96,12 +96,12 @@ def extract_experiment_info(folder_path):
 
 
 def get_metric_dataframe(exp_paths):
-    """获取所有实验的指标数据"""
+    """Get metrics data for all experiments"""
     tmp = []
     default_metrics = ['acc', 'sc', 'db', 'f1_all_macro', 'f1_all_micro']
     fscil_metric = ['f1_new_macro', 'f1_new_micro', 'f1_old_macro', 'f1_old_micro']
     
-    for exp_path in tqdm(exp_paths, desc="处理实验文件夹"):
+    for exp_path in tqdm(exp_paths, desc="Processing experiment folders"):
         try:
             data = extract_experiment_info(exp_path)
 
@@ -170,9 +170,9 @@ def main():
     df.to_csv(f'{save_dir}/experiment_metrics_{timestamp}.csv', index=False)
     df.to_parquet(f'{save_dir}/experiment_metrics_{timestamp}.parquet')
 
-    print(f"\n分析完成！结果已保存到 {save_dir} 目录")
-    print(f"CSV文件: experiment_metrics_{timestamp}.csv")
-    print(f"Parquet文件: experiment_metrics_{timestamp}.parquet")
+    print(f"\nAnalysis completed! Results saved to {save_dir} directory")
+    print(f"CSV file: experiment_metrics_{timestamp}.csv")
+    print(f"Parquet file: experiment_metrics_{timestamp}.parquet")
 
 
 if __name__ == '__main__':

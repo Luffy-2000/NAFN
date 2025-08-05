@@ -5,7 +5,9 @@ import pandas as pd
 import os
 import json
 import util.metrics
-
+from sklearn.metrics import roc_auc_score, roc_curve
+import numpy as np
+import torch
 
 folder_2_phase = {
         'adaptation_data': 'adaptation',
@@ -23,24 +25,23 @@ def load_label_names(classes_info_path, label_conv_path):
     with open(label_conv_path, 'r') as f:
         label_map = eval(f.read())
     
-    # 2. 提取 old_classes 和 new_classes 的 key (字符串转 int)
+    # 2. Extract keys from old_classes and new_classes (convert string to int)
     old_keys = list(map(int, class_info['old_classes'].keys()))
     new_keys = list(map(int, class_info['new_classes'].keys()))
 
-    # 3. 根据 label_map 的 value 找到对应名称
-    # 注意：你的 label_map 是 {"名称": 编码}，我们需要反向映射
+    # 3. Find corresponding names based on label_map values
+    # Note: your label_map is {"name": code}, we need reverse mapping
     inv_label_map = {v: k for k, v in label_map.items()}
 
     old_labels = [inv_label_map[k] for k in old_keys]
     new_labels = [inv_label_map[k] for k in new_keys]
 
-    old_labels = [label.replace('_', ' ') for label in old_labels]   # ← 修改
-    new_labels = [label.replace('_', ' ') for label in new_labels]   # ← 修改
-    # 4. 拼接 old + new 得到完整类别名称
+    old_labels = [label.replace('_', ' ') for label in old_labels]   # ← modified
+    new_labels = [label.replace('_', ' ') for label in new_labels]   # ← modified
+    # 4. Concatenate old + new to get complete class names
     all_labels = old_labels + new_labels
 
     return all_labels, len(old_labels)
-
 
 
 def plot_confusion_matrix(exp_path, dataset):
@@ -52,9 +53,9 @@ def plot_confusion_matrix(exp_path, dataset):
     Parameters:
         - exp_path (``str``): The path to the experiment directory.
     """
-    # 加载类名与旧类数量
+    # Load class names and old class count
     classes_info_path = os.path.join(exp_path, 'classes_info.json')
-    label_conv_path = f'../data/{dataset}/classes_map_rename.txt'  # 路径视项目结构可能需要调整
+    label_conv_path = f'../data/{dataset}/classes_map_rename.txt'  # Path may need adjustment based on project structure
     labels, line_x = load_label_names(classes_info_path, label_conv_path)
     print("labels:", labels)
     print("line_x:", line_x)
@@ -66,14 +67,14 @@ def plot_confusion_matrix(exp_path, dataset):
         
         os.makedirs(f'{exp_path}/img', exist_ok=True)
             
-        # 调用你已有的 util 函数计算混淆矩阵
+        # Call your existing util function to compute confusion matrix
         avg_cm, avg_cm_raw = util.metrics.compute_confusion_matrix(
             path=folder_path, 
             files=['logits', 'labels']
         )
 
-        # ========= 保存标准化混淆矩阵 ==========
-        df_cm = pd.DataFrame(avg_cm) * 100  # 转为百分比
+        # ========= Save normalized confusion matrix ==========
+        df_cm = pd.DataFrame(avg_cm) * 100  # Convert to percentage
         df_cm = df_cm.rename_axis('Actual Label').rename(columns=lambda x: x)
         df_cm.index.name = 'Actual Label'
 
@@ -89,8 +90,8 @@ def plot_confusion_matrix(exp_path, dataset):
             xticklabels=labels, yticklabels=labels,
             vmin=0, vmax=100
         )
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha='right')  # ha=right让文字不重叠
-        ax.set_yticklabels(ax.get_yticklabels(), rotation=0)  # y轴保持不旋转
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha='right')  # ha=right prevents text overlap
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0)  # y-axis remains unrotated
         plt.axvline(x=line_x, linewidth=3, color='k')
         plt.axhline(y=line_x, linewidth=3, color='k')
         plt.xlabel('Predicted Label')
@@ -99,7 +100,7 @@ def plot_confusion_matrix(exp_path, dataset):
         plt.savefig(pdf_file, bbox_inches="tight")
         plt.close()
 
-        # ========= 保存未标准化混淆矩阵 ==========
+        # ========= Save unnormalized confusion matrix ==========
         df_cm_raw = pd.DataFrame(avg_cm_raw)
         raw_cm_file = f'{exp_path}/img/cm_{folder}_raw.csv'
         raw_pdf_file = f'{exp_path}/img/cm_{folder}_raw.pdf'
