@@ -21,11 +21,9 @@ def permutation(x, a=1, random_state=None):
 
     weights = [0.15, 0.45, 0.75, 0.9]
     N = 2 + np.argmax([w for w in weights if w <= a])
-    x, pad = _split_on_pad(x)
-    
+    x, pad = _split_on_pad(x)  # split true traffic and pad
     n = _execute_revert_random_state(
             np.random.randint, dict(low=2, high=N+1, size=None), random_state)
-       
     temp = np.array_split(x, n, axis=1) # Split into n segments of random length
     temp = [t for t in temp if t.size > 0]
     
@@ -117,7 +115,6 @@ def wrap(x, a=1, fill_value=[0, 0, 0.5, 0, 0, 0]):
 
 def _split_on_pad(x):
     indices_pad = np.where(x[0, :, 0] == 0)[0]
-    
     if indices_pad.size == 0:
         # No pad 
         bfl = x

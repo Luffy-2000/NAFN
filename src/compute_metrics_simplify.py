@@ -40,22 +40,98 @@ def load_label_map(label_conv_path):
     return label_map
 
 
-def compute_pauc(y_true, y_scores, max_fpr=0.01):
+def extract_pre_mode_from_path(path):
     """
-    Calculate pAUC (partial AUC) using sklearn's roc_auc_score
+    Extract pre_mode from folder path name
     
     Parameters:
-        - y_true: true labels (binary classification: 0=benign, 1=attack)
-        - y_scores: prediction scores (higher values indicate positive class)
-        - max_fpr: maximum false positive rate, default 0.01 (1%)
+        - path (str): folder path
     
     Returns:
-        - pauc: normalized partial AUC value (range 0~1)
+        - str: pre_mode value ('none', 'recon', 'contrastive', 'hybrid') or 'unknown'
+    """
+    # Split path and find the folder that contains pre_mode
+    path_parts = path.split('/')
+    
+    # Define possible pre_mode values
+    pre_modes = ['none', 'recon', 'contrastive', 'hybrid']
+    
+    # Check each part of the path for pre_mode
+    for part in path_parts:
+        for mode in pre_modes:
+            if mode in part:
+                return mode
+    
+    # If not found, return 'unknown'
+    return 'unknown'
+
+
+def compute_pauc_sklearn(y_true, y_scores, max_fpr=0.01):
+    """
+    Standardized pAUC via sklearn (random≈0.5, perfect=1.0).
+    Positive class must have higher scores.
     """
     return roc_auc_score(y_true, y_scores, max_fpr=max_fpr)
 
 
-def compute_binary_pauc(exp_path, dataset):
+def make_scores_from_logits(logits, benign_idx, method="logmeanexp_margin"):
+    """
+    logits: (N, C) 原始多类logits（来自你模型/NN head）
+    benign_idx: 良性类在本地(episode)的列索引
+    method:
+      - 'logmeanexp_margin'  # 默认：log(恶意平均e^z) - z_benign  (对“恶意类多”不敏感)
+      - 'logsumexp_margin'   # logsumexp(恶意) - z_benign       (更“乐观”，略偏向恶意)
+      - 'max_margin'         # max(恶意) - z_benign             (看最像的一个恶意类)
+      - 'mal_sum_prob'       # sum softmax(恶意) = 1 - p_benign  (等价二元化的边际概率)
+      - 'mal_mean_prob'      # mean softmax(恶意)                (对类数更中性)
+      - 'mal_max_prob'       # max softmax(恶意)
+    """
+    z = torch.as_tensor(logits, dtype=torch.float32)         # (N, C)
+    N, C = z.shape
+    device = z.device
+    all_idx = torch.arange(C, device=device)
+    mal_mask = all_idx != benign_idx
+    z_b = z[:, benign_idx]
+    z_m = z[:, mal_mask]                                     # (N, C-1)
+
+    if method == "logmeanexp_margin":
+        # log(mean exp(z_m)) - z_b = (logsumexp(z_m) - log(K)) - z_b
+        K = z_m.shape[1]
+        scores = torch.logsumexp(z_m, dim=1) - np.log(K) - z_b
+        return scores.cpu().numpy()
+
+    if method == "logsumexp_margin":
+        scores = torch.logsumexp(z_m, dim=1) - z_b
+        return scores.cpu().numpy()
+
+    if method == "max_margin":
+        scores = z_m.max(dim=1).values - z_b
+        return scores.cpu().numpy()
+
+    # softmax 概率系
+    probs = torch.softmax(z, dim=1)
+    p_b = probs[:, benign_idx]
+    p_m_all = probs[:, mal_mask]                             # (N, C-1)
+
+    if method == "mal_sum_prob":
+        scores = p_m_all.sum(dim=1)                          # = 1 - p_b
+        return scores.cpu().numpy()
+
+    if method == "mal_mean_prob":
+        scores = p_m_all.mean(dim=1)                         # 对类数中性
+        return scores.cpu().numpy()
+
+    if method == "mal_max_prob":
+        scores = p_m_all.max(dim=1).values
+        return scores.cpu().numpy()
+
+    raise ValueError(f"Unknown method: {method}")
+
+def _mean_std(arr):
+    arr = np.asarray(arr, dtype=float)
+    return float(np.mean(arr)), float(np.std(arr))
+
+def compute_binary_pauc(exp_path, dataset, max_fprs=(0.01, 0.02, 0.05), score_method="logmeanexp_margin", return_per_task=False,):
     """
     Calculate binary classification (benign vs malicious) pAUC (max_fpr=0.01)
     
@@ -69,137 +145,146 @@ def compute_binary_pauc(exp_path, dataset):
     label_conv_path = f'../data/{dataset}/classes_map_rename.txt'
     label_map = load_label_map(label_conv_path)
 
+
     classes_info_path = os.path.join(exp_path, 'classes_info.json')
     with open(classes_info_path, 'r') as f:
         class_info = json.load(f)
-    print(dataset)
-    # print(label_map)
-    # print(class_info)
 
-    # Load class names
+    # ---------- load class names ----------
+
     old_keys = list(map(int, class_info['old_classes'].keys()))
     new_keys = list(map(int, class_info['new_classes'].keys()))
     inv_label_map = {v: k for k, v in label_map.items()}
     old_labels = [inv_label_map[k] for k in old_keys]
     new_labels = [inv_label_map[k] for k in new_keys]
     labels = old_labels + new_labels
-    # print(labels)
-
-    pauc_results = {}
+    # pauc_results = {}
     
-    for folder in ['adaptation_data']:
-        folder_path = os.path.join(exp_path, folder)
-        if not os.path.isdir(folder_path):
-            print(f'INFO: {folder_path} does not exist')
+    # ---------- load tensors ----------
+    folder = 'adaptation_data'
+    folder_path = os.path.join(exp_path, folder)
+    if not os.path.isdir(folder_path):
+        raise FileNotFoundError(f'{folder_path} does not exist')
+
+    logits_data = np.load(os.path.join(folder_path, 'logits.npz'))
+    labels_data = np.load(os.path.join(folder_path, 'labels.npz'))
+
+    if 'query_labels' in labels_data:
+        true_labels = labels_data['query_labels']  # (T, N)
+    else:
+        true_labels = labels_data['labels']        # (T, N)
+
+    logits = logits_data['logits']                 # (T, N, C)
+
+    if logits.ndim != 3 or true_labels.ndim != 2:
+        raise ValueError(f'Expect logits shape (T,N,C) and true_labels (T,N), got {logits.shape} and {true_labels.shape}')
+
+    T, N, C = logits.shape
+    if true_labels.shape != (T, N):
+        raise ValueError('true_labels shape must be (T, N) matching logits first two dims.')
+
+    # ---------- benign index ----------
+    benign_idx_list = [i for i, name in enumerate(labels) if str(name).lower() == 'benign']
+    if len(benign_idx_list) != 1:
+        raise ValueError("Benign class is not unique or missing, or label order mismatched with logits columns.")
+    benign_idx = int(benign_idx_list[0])
+
+
+    # ---------- iterate episodes ----------
+    per_task_auc = []
+    per_task_pauc = {alpha: [] for alpha in max_fprs}
+    skipped_tasks = 0
+    reasons = []
+
+    for t in range(T):
+        task_logits = logits[t]      # (N, C)
+        task_labels = true_labels[t] # (N,)
+        # print(task_logits[0])
+        # print(task_labels[0])
+        # exit()
+        # exit()
+        # Binary labels: 1=malicious, 0=benign
+        binary_labels = (task_labels != benign_idx).astype(int)
+
+        # 如果任务中只有单一类别，ROC 不可计算，跳过
+        n_pos = int(np.sum(binary_labels == 1))
+        n_neg = int(np.sum(binary_labels == 0))
+        if n_pos == 0 or n_neg == 0:
+            skipped_tasks += 1
+            reasons.append((t, f"skip: n_pos={n_pos}, n_neg={n_neg}"))
             continue
 
-        # Load logits and labels
+        # 分数（越大越恶性）
+        y_scores = make_scores_from_logits(task_logits, benign_idx, method=score_method)
+        # print(y_scores[0])
+        # exit()
+        # 计算 AUC
         try:
-            logits_data = np.load(f'{folder_path}/logits.npz')
-            labels_data = np.load(f'{folder_path}/labels.npz')
-
-            if 'query_labels' in labels_data:
-                true_labels = labels_data['query_labels']
-            else:
-                true_labels = labels_data['labels']
-
-            logits = logits_data['logits']
-
-            # If 3D -> flatten
-            if logits.ndim == 3:
-                logits = logits.reshape(-1, logits.shape[-1])
-                true_labels = true_labels.reshape(-1)
-
+            auc_val = roc_auc_score(binary_labels, y_scores)
+            per_task_auc.append(auc_val)
         except Exception as e:
-            print(f"Warning: Could not load data from {folder_path}: {str(e)}")
+            skipped_tasks += 1
+            reasons.append((t, f"AUC error: {e}"))
             continue
 
-        # Find benign class index
-        benign_idx = [i for i, name in enumerate(labels) if name.lower() == 'benign']
-        print(benign_idx)
-        if len(benign_idx) != 1:
-            print("Error: benign class is not unique or missing")
-            continue
-        benign_idx = benign_idx[0]
-        # print(benign_idx)
-        # Construct binary labels
-        print(true_labels)
-        print(true_labels.shape)
-        print("logits", logits)
-        binary_labels = (true_labels != benign_idx).astype(int)
-        print(binary_labels)
-        print(f"Binary labels count - 0 (benign): {np.sum(binary_labels == 0)}, 1 (malicious): {np.sum(binary_labels == 1)}")
-        # Apply softmax to get probabilities
-        probs = torch.softmax(torch.tensor(logits, dtype=torch.float32), dim=1).numpy()
-        print(f"Probabilities shape: {probs.shape}")
-        
-        # Method 1: Use benign class probability as score (higher = more likely benign)
-        # For pAUC, we want higher scores for positive class (benign)
-        y_scores_benign = probs[:, benign_idx]
-        
-        # Method 2: Use max probability among malicious classes as score (higher = more likely malicious)
-        malicious_idx = [i for i in range(probs.shape[1]) if i != benign_idx]
-        y_scores_malicious = np.max(probs[:, malicious_idx], axis=1)
-        
-        # Method 3: Use logit difference (malicious - benign) as score
-        logits_tensor = torch.tensor(logits, dtype=torch.float32)
-        y_scores_diff = (logits_tensor[:, malicious_idx].max(dim=1)[0] - logits_tensor[:, benign_idx]).numpy()
-        
-        # Method 4: Aggregate all malicious classes (sum of probabilities)
-        y_scores_aggregated = np.sum(probs[:, malicious_idx], axis=1)
-        
-        # Method 5: Aggregate all malicious classes (weighted sum based on class frequency)
-        # Calculate class frequencies in the current batch
-        unique_labels, label_counts = np.unique(true_labels, return_counts=True)
-        label_freq = dict(zip(unique_labels, label_counts))
-        malicious_weights = np.array([label_freq.get(idx, 1) for idx in malicious_idx])
-        malicious_weights = malicious_weights / np.sum(malicious_weights)  # Normalize
-        y_scores_weighted = np.sum(probs[:, malicious_idx] * malicious_weights, axis=1)
-        
-        print(f"Score ranges:")
-        print(f"  Benign prob: {y_scores_benign.min():.4f} to {y_scores_benign.max():.4f}")
-        print(f"  Malicious prob: {y_scores_malicious.min():.4f} to {y_scores_malicious.max():.4f}")
-        print(f"  Logit diff: {y_scores_diff.min():.4f} to {y_scores_diff.max():.4f}")
-        print(f"  Aggregated malicious: {y_scores_aggregated.min():.4f} to {y_scores_aggregated.max():.4f}")
-        print(f"  Weighted malicious: {y_scores_weighted.min():.4f} to {y_scores_weighted.max():.4f}")
-        
-        # Choose the best scoring method for pAUC
-        # For pAUC with max_fpr=0.01, we want to detect malicious samples with low false positive rate
-        # You can choose different methods by uncommenting the desired line:
-        
-        # Method 1: Use benign probability (higher = more likely benign)
-        # y_scores = y_scores_benign
-        
-        # Method 2: Use max malicious probability (higher = more likely malicious)
-        y_scores = y_scores_malicious
-        
-        # Method 3: Use logit difference (malicious - benign)
-        # y_scores = y_scores_diff
-        
-        # Method 4: Use aggregated malicious probability (sum of all malicious classes)
-        # y_scores = y_scores_weighted
-        
-        # Method 5: Use weighted aggregated malicious probability (based on class frequency)
-        # y_scores = y_scores_weighted
-        
-        # Calculate pAUC
-        pauc = compute_pauc(binary_labels, y_scores)
-        print(f"pAUC (max_fpr=0.01): {pauc:.4f}")
-        
-        # Also calculate regular AUC for comparison
-        from sklearn.metrics import roc_auc_score
-        auc = roc_auc_score(binary_labels, y_scores)
-        print(f"Regular AUC: {auc:.4f}")
-        
-        # Save results
-        phase_name = folder.replace('_', ' ')
-        pauc_results[f'{phase_name}_pauc'] = pauc
-        pauc_results[f'{phase_name}_auc'] = auc  # Also save regular AUC
-        
-        # print(f"[{folder}] Merged benign vs malicious pAUC = {pauc:.4f}")
+        # 计算多个 pAUC
+        for alpha in max_fprs:
+            try:
+                pauc_val = compute_pauc_sklearn(binary_labels, y_scores, max_fpr=alpha)
+                per_task_pauc[alpha].append(pauc_val)
+            except Exception as e:
+                reasons.append((t, f"pAUC error@{alpha}: {e}"))
+                # 不中断，继续后面的 alpha
 
-    return pauc_results
+    # ---------- aggregate ----------
+    results = {
+        'n_tasks_total': int(T),
+        'n_tasks_used': int(len(per_task_auc)),
+        'auc_mean': 0.0,
+        'auc_std': 0.0,
+    }
 
+    if len(per_task_auc) > 0:
+        auc_mean, auc_std = _mean_std(per_task_auc)
+        results['auc_mean'] = auc_mean
+        results['auc_std'] = auc_std
+
+    for alpha in max_fprs:
+        vals = per_task_pauc[alpha]
+        key_mean = f'pauc@{alpha}_mean'
+        key_std  = f'pauc@{alpha}_std'
+        if len(vals) > 0:
+            m, s = _mean_std(vals)
+            results[key_mean] = m
+            results[key_std]  = s
+        else:
+            results[key_mean] = None
+            results[key_std]  = None
+
+    if return_per_task:
+        results['per_task_auc'] = per_task_auc
+        for alpha in max_fprs:
+            results[f'per_task_pauc@{alpha}'] = per_task_pauc[alpha]
+        results['skipped_tasks'] = skipped_tasks
+        results['skip_reasons'] = reasons
+
+    # 友好打印
+    print(f"[Episodic] Tasks used: {results['n_tasks_used']}/{results['n_tasks_total']}")
+    if results['n_tasks_used'] > 0:
+        print(f"AUC (mean±std): {results['auc_mean']:.4f} ± {results['auc_std']:.4f}")
+        for alpha in max_fprs:
+            m = results[f'pauc@{alpha}_mean']
+            s = results[f'pauc@{alpha}_std']
+            if m is not None:
+                print(f"pAUC_sklearn@{alpha} (mean±std): {m:.4f} ± {s:.4f}")
+            else:
+                print(f"pAUC_sklearn@{alpha}: None (no valid tasks)")
+
+    if skipped_tasks > 0:
+        print(f"Skipped {skipped_tasks} tasks (see results['skip_reasons'])")
+
+    return results
+    
 
 def get_metric(exp_path, data, wanted_metrics, class_pool, folders):    
     metrics = util.logger.get_metric(
@@ -225,12 +310,17 @@ def get_metric_dataframe(exp_path):
                 data['version'] = int(version_match.group(1))
             else:
                 data['version'] = np.nan
-                
-            for exp_arg in exp_args:
-                data[exp_arg] = dict_args[exp_arg]
-            is_fscil = dict_args['is_fscil']
-                            
+            
+            # Define path first
             path = str(args_path).replace('dict_args.json', '')
+            print(path)
+            # Extract pre_mode from folder name instead of dict_args
+            for exp_arg in exp_args:
+                if exp_arg == 'pre_mode':
+                    data[exp_arg] = extract_pre_mode_from_path(path)
+                else:
+                    data[exp_arg] = dict_args[exp_arg]
+            is_fscil = dict_args['is_fscil']
             
             match = re.search(r'_al_cycle_(\d+)', path)
             data['curr_al_cycle']  = match.group(1) if match else np.nan

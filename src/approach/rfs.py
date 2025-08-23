@@ -16,26 +16,26 @@ from util.traffic_transformations import permutation, pkt_translating, wrap
 EPSILON = 1e-8
 
 
-class NTXentLoss(nn.Module):
-    def __init__(self, temperature=0.5):
-        super(NTXentLoss, self).__init__()
-        self.temperature = temperature
-        self.criterion = nn.CrossEntropyLoss()
+# class NTXentLoss(nn.Module):
+#     def __init__(self, temperature=0.5):
+#         super(NTXentLoss, self).__init__()
+#         self.temperature = temperature
+#         self.criterion = nn.CrossEntropyLoss()
         
-    def forward(self, z_i, z_j):
-        batch_size = z_i.shape[0]
-        z_i = F.normalize(z_i, dim=1)
-        z_j = F.normalize(z_j, dim=1)
-        features = torch.cat([z_i, z_j], dim=0)
-        similarity_matrix = F.cosine_similarity(features.unsqueeze(1), features.unsqueeze(0), dim=2) / self.temperature
-        mask = torch.eye(2 * batch_size, dtype=bool, device=similarity_matrix.device)    
-        similarity_matrix[mask] = -float('inf')
-        pos_idx = torch.arange(batch_size, device=similarity_matrix.device)
-        pos_idx = torch.cat([pos_idx + batch_size, pos_idx], dim=0)
-        logits = similarity_matrix
-        labels = pos_idx
-        loss = self.criterion(logits, labels) / (2 * batch_size)
-        return loss
+#     def forward(self, z_i, z_j):
+#         batch_size = z_i.shape[0]
+#         z_i = F.normalize(z_i, dim=1)
+#         z_j = F.normalize(z_j, dim=1)
+#         features = torch.cat([z_i, z_j], dim=0)
+#         similarity_matrix = F.cosine_similarity(features.unsqueeze(1), features.unsqueeze(0), dim=2) / self.temperature
+#         mask = torch.eye(2 * batch_size, dtype=bool, device=similarity_matrix.device)    
+#         similarity_matrix[mask] = -float('inf')
+#         pos_idx = torch.arange(batch_size, device=similarity_matrix.device)
+#         pos_idx = torch.cat([pos_idx + batch_size, pos_idx], dim=0)
+#         logits = similarity_matrix
+#         labels = pos_idx
+#         loss = self.criterion(logits, labels) / (2 * batch_size)
+#         return loss
 
 
 class LightningRFS(LightningTLModule):
@@ -92,9 +92,6 @@ class LightningRFS(LightningTLModule):
         self.alpha = kwargs.get('alpha', LightningRFS.alpha) if self.is_distill else 0
         self.gamma = kwargs.get('gamma', LightningRFS.gamma) if self.is_distill else 1
 
-        # self.pretrained_autoencoder = kwargs.get('pretrained_autoencoder', LightningRFS.pretrained_autoencoder)
-        # self.is_unsupervised = kwargs.get('is_unsupervised', LightningRFS.is_unsupervised)
-
         # Mode: 'recon' or 'contrastive' or 'hybrid'
         self.mode = kwargs.get('pre_mode', 'none')
         # self.ways = kwargs.get('ways', 5)
@@ -102,7 +99,7 @@ class LightningRFS(LightningTLModule):
         self.temperature = kwargs.get('temperature', 0.5)
         self.transform_strength = kwargs.get('transform_strength', 0.8)
         self.mes_loss = nn.MSELoss()
-        self.ntx_loss = NTXentLoss(temperature=self.temperature)
+        # self.ntx_loss = NTXentLoss(temperature=self.temperature)
         # Loss weights
         self.recon_weight = kwargs.get('recon_weight', 0.2)
         self.ce_weight = kwargs.get('ce_weight', 0.8)
@@ -136,8 +133,6 @@ class LightningRFS(LightningTLModule):
             "pre_mode": self.mode,
             "denoising": self.denoising,
             "noise_ratio": self.noise_ratio
-            # "pretrained_autoencoder": self.pretrained_autoencoder,
-            # "is_unsupervised": self.is_unsupervised
         })
 
         # ========== MOCO related ==========
@@ -187,12 +182,6 @@ class LightningRFS(LightningTLModule):
             choices=['lr', 'nn'],
             default=LightningRFS.base_learner
         )
-        # parser.add_argument(
-        #     "--pretrained-autoencoder",
-        #     type=str,
-        #     default=LightningRFS.pretrained_autoencoder,
-        #     help="Path to pretrained autoencoder model"
-        # )
         return parser
     
     def on_adaptation_start(self):
@@ -208,7 +197,7 @@ class LightningRFS(LightningTLModule):
 
     def _apply_transform(self, x, transform_method=None):
         """Apply the same random transformation to all samples in the batch"""
-        # Convert tensor to numpy for transformation
+
         device = x.device
         x_np = x.detach().cpu().numpy()
         
@@ -227,6 +216,7 @@ class LightningRFS(LightningTLModule):
             transformed = np.array([wrap(sample, a=self.transform_strength) for sample in x_np])
         # Convert back to PyTorch tensor
         return torch.from_numpy(transformed).to(device)
+
 
     def _moco_momentum_update_encoder(self):
         """Momentum update for encoder parameters"""
@@ -279,6 +269,7 @@ class LightningRFS(LightningTLModule):
                 loss = self.recon_weight * recon_loss + self.ce_weight * ce_loss
             elif self.mode == 'contrastive':
                 # MOCO contrastive learning
+                print('data.shape', data.shape)
                 data_aug = self._apply_transform(data, transform_method=0)
                 student_logits, q, _ = self.net(data, return_features=True)
                 with torch.no_grad():
@@ -314,16 +305,37 @@ class LightningRFS(LightningTLModule):
                 data_aug = self._apply_transform(data, transform_method=0)
                 
                 # Get the output of the original samples
-                student_logits, features, recon_x = self.net(data, return_features=True)
-                # Get the features of the augmented samples
-                _, features_aug, _ = self.net(data_aug, return_features=True)
+                student_logits, q, recon_x = self.net(data, return_features=True)
+                
+                # MOCO contrastive learning
+                with torch.no_grad():
+                    self._moco_momentum_update_encoder()
+                    _, k, _ = self.moco_encoder(data_aug, return_features=True)
+                q = F.normalize(q, dim=1)
+                k = F.normalize(k, dim=1)         # [B, 320]
+                # Dynamically adapt MOCO queue feature dimension
+                if q.shape[1] != self.moco_queue.shape[0]:
+                    device = q.device
+                    self.moco_dim = q.shape[1]
+                    self.moco_queue = torch.randn(self.moco_dim, self.moco_K, device=device)
+                    self.moco_queue = F.normalize(self.moco_queue, dim=0)
+                    self.moco_queue_ptr = torch.zeros(1, dtype=torch.long, device=device)
+                # Positive samples
+                l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)  # [B,1]
+                # Negative samples
+                queue = self.moco_queue.clone().detach()
+                l_neg = torch.einsum('nc,ck->nk', [q, queue])           # [B,K]
+                logits = torch.cat([l_pos, l_neg], dim=1)               # [B,1+K]
+                logits /= self.temperature
+                labels_con = torch.zeros(logits.shape[0], dtype=torch.long, device=logits.device)
+                contrastive_loss = F.cross_entropy(logits, labels_con)
+                # Enqueue and dequeue
+                self._moco_dequeue_and_enqueue(k)
                 
                 # Calculate the classification loss
                 ce_loss = self.ce_loss(student_logits, labels)
                 # Calculate the reconstruction loss
                 recon_loss = self.mes_loss(recon_x, data)
-                # Calculate the contrastive loss
-                contrastive_loss = self.ntx_loss(features, features_aug)
                 eval_accuracy = accuracy(student_logits, labels)
                 loss = self.ce_weight * ce_loss + self.recon_weight * recon_loss + self.contrastive_weight * contrastive_loss
             else:
