@@ -12,7 +12,7 @@ from modules.losses import DistillKLLoss
 from modules.teachers import Teacher
 from modules.classifiers import NN, LR
 from util.traffic_transformations import permutation, pkt_translating, wrap
-
+from util.denoising import Denoiser, DenoiseConfig
 EPSILON = 1e-8
 
 
@@ -356,66 +356,47 @@ class LightningRFS(LightningTLModule):
         self.dist_calibrator = dist_calibrator
         data, labels = batch
         labels, le = self.label_encoding(labels)
+        # print('labels', labels)
 
         way = labels.unique().size(0)
         
         # Embed the input
         _, feats, _ = self.net(data, return_features=True)
+        # print('feats.shape', feats.shape)
         
         # Split the embedded input
-        batch_support, batch_query = l2l.data.utils.partition_task(
-            feats, labels, shots=self.shots)
-        s_embeddings, support_labels = batch_support
-        q_embeddings, query_labels = batch_query
+        # batch_support, batch_query = l2l.data.utils.partition_task(
+        #     feats, labels, shots=self.shots)
+        # batch_support = feats[:way * self.shots]
+        # batch_query = feats[way * self.shots:]
 
+        s_embeddings, support_labels = feats[:way * self.shots], labels[:way * self.shots]
+        q_embeddings, query_labels = feats[way * self.shots:], labels[way * self.shots:]
+        # print('support_labels', support_labels)
+        # print('query_labels', query_labels)
+        
+        # 初始化（例如：用 proto_margin；或 "LOF"/"IF"/"none"）
+        cfg = DenoiseConfig(
+            strategy= self.denoising,     # "proto_margin" | "LOF" | "IF" | "none"
+            noise_ratio=self.noise_ratio,
+            lof_k=10,
+            if_random_state=42,
+            proto_iters=2,
+            metric="cosine",             # "cosine" 推荐；或 "euclidean"
+        )
+        denoiser = Denoiser(cfg)
 
         # === Denoising for new classes only, using classes_per_set to distinguish ===
-        device = s_embeddings.device
-        support_labels_np = support_labels.detach().cpu().numpy()
-        old_class_ids = set(range(self.num_old_classes))
-        new_class_ids = set(range(self.num_old_classes, self.num_old_classes + self.num_new_classes))
-        mask = torch.zeros_like(support_labels, dtype=torch.bool)
-        # Merge LOF/IF branches to reduce duplication
-        if self.denoising in ['LOF', 'IF']:
-            if self.denoising == 'LOF':
-                from sklearn.neighbors import LocalOutlierFactor
-                def get_scores(model, emb):
-                    model.fit(emb)
-                    return model.negative_outlier_factor_
-                OutlierModel = lambda: LocalOutlierFactor(n_neighbors=5, contamination=self.noise_ratio)
-            else:
-                from sklearn.ensemble import IsolationForest
-                def get_scores(model, emb):
-                    model.fit(emb)
-                    return model.decision_function(emb)
-                OutlierModel = lambda: IsolationForest(contamination=self.noise_ratio, random_state=42)
-            for cls in np.unique(support_labels_np):
-                idx = (support_labels_np == cls)
-                idx_tensor = torch.from_numpy(idx).to(device)
-                if cls in old_class_ids:
-                    mask[idx_tensor] = True
-                    continue
-                emb = s_embeddings.detach().cpu().numpy()[idx]
-                model = OutlierModel()
-                scores = get_scores(model, emb)
-                n_outliers = int(0.3 * len(scores))
-                if n_outliers == 0 and len(scores) > 1:
-                    n_outliers = 1
-                outlier_mask = np.argsort(scores)[:n_outliers]
-                inlier_mask = np.ones(len(scores), dtype=bool)
-                inlier_mask[outlier_mask] = False
-                idx_indices = np.where(idx)[0]
-                keep_indices = idx_indices[inlier_mask]
-                mask[torch.from_numpy(keep_indices).to(device)] = True
-        else:  # 'none'
-            n_outliers = 0
-            mask[:] = True
-        
-        s_embeddings = s_embeddings[mask]
-        support_labels = support_labels[mask]
+        s_embeddings, support_labels, mask = denoiser(
+            s_embeddings=s_embeddings,                  # (N, D)
+            support_labels=support_labels,              # (N,)
+            num_old_classes=self.num_old_classes,
+            num_new_classes=self.num_new_classes,
+        )
         # === End of denoising ===
 
-        if self.denoising in ['LOF', 'IF']:
+
+        if self.denoising is not 'none':
             # === Record new class distribution and calibrate and supplement ===
             # Need self.dist_calibrator and self.num_old_classes, self.num_new_classes
             new_class_ids = set(range(self.num_old_classes, self.num_old_classes + self.num_new_classes))
@@ -431,6 +412,7 @@ class LightningRFS(LightningTLModule):
                 # Calibrate new class distribution
                 mu, sigma = self.dist_calibrator.calibrate(int(cls), features)
                 # Sample and supplement features
+                n_outliers = max(1, int(self.noise_ratio * features.shape[0]))  # Supplement 30% samples
                 # n_samples = max(1, int(0.3 * features.shape[0]))  # Supplement 30% samples
                 samples, labels = self.dist_calibrator.sample_from_class(int(cls), n_outliers)
                 new_support_features.append(samples)

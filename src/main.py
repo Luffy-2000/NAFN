@@ -75,7 +75,7 @@ def main():
                         help='If set, add label noise to support set in each episode')
     parser.add_argument('--noise-ratio', type=float, default=0.0,
                         help='Ratio of support samples to corrupt with label noise (default=0.2)')
-    parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF'],
+    parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF', 'proto_margin'],
                         help='Denoising method for support set: none (no denoising), LOF (Local Outlier Factor), IF (Isolation Forest)')
     args = parser.parse_args()
     dict_args = vars(args)
@@ -94,7 +94,7 @@ def main():
     
     ####
     ## 1 - GET LOADERS
-    ####  
+    ####
     rng.seed_everything(args.seed)
     ways, pretrain_datamodule, finetune_taskset = get_loaders(
         dataset=args.dataset,
@@ -119,8 +119,7 @@ def main():
     ####
     args.num_outputs = ways[0]
     net = LLL_Net.factory_network(**vars(args))
-    print(net)
-    
+
     if args.patience == -1:
         args.patience = float('inf')
         
@@ -159,6 +158,7 @@ def main():
         noise_label=args.noise_label,
         noise_ratio=args.noise_ratio,
     )
+
     memory_task_dataset.initialize_memory(net, pretrain_datamodule.train_set)
 
     dist_calibrator = RepresentationDistributionCalibrator(top_q=3, gamma=0.7, alpha=1e-2)

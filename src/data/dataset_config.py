@@ -16,7 +16,6 @@ class ClassInfo:
         with open(f'{path}/classes_info.json', 'w') as f:
             json.dump(self.data, f)
             
-
 dataset_config = {
     'iot_nid': {
         'path': join(_BASE_DATA_PATH, 'iot_nid',

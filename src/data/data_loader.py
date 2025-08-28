@@ -97,14 +97,48 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         """
         y = y.clone()
         y = y.reshape(len(self.new_class_ids), self.shots)
+        # print('y', y)
+        # exit()
         num_noisy = int(self.shots * noise_ratio)
         num_correct = self.shots - num_noisy
         y_correct = y[:, :num_correct]
         y_noisy = y[:, num_correct:]
-        y_noisy = y_noisy.reshape(-1)[torch.randperm(y_noisy.numel())].reshape(len(self.new_class_ids), num_noisy)
+
+        for j in range(y_noisy.shape[1]):
+            random_0_1 = random.random()
+            if random_0_1 < 0.5:
+                y_noisy[:, j] = torch.cat([y_noisy[1:, j], y_noisy[0, j].unsqueeze(0)], dim=0)
+            else:
+                y_noisy[:, j] = torch.cat([y_noisy[-1, j].unsqueeze(0), y_noisy[:-1, j]], dim=0)
+
         y = torch.cat([y_correct, y_noisy], dim=1)
         y = y.reshape(-1)
         return y
+
+    def add_label_noise_to_x(self, x, noise_ratio):
+        """
+        Add label noise within each class: for each class, randomly select a portion of samples and change their labels to a wrong class, but keep the number of samples per class unchanged.
+        """
+        x = x.clone()
+        n, c, h, w = x.shape
+        assert len(self.new_class_ids) * self.shots == n
+        x = x.reshape(len(self.new_class_ids), self.shots, c, h, w)
+        
+        num_noisy = int(self.shots * noise_ratio)
+        num_correct = self.shots - num_noisy
+        x_correct = x[:, :num_correct]
+        x_noisy = x[:, num_correct:]
+        
+        for j in range(x_noisy.shape[1]):
+            random_0_1 = random.random()
+            if random_0_1 < 0.5:
+                x_noisy[:, j] = torch.cat([x_noisy[1:, j], x_noisy[0, j].unsqueeze(0)], dim=0)
+            else:
+                x_noisy[:, j] = torch.cat([x_noisy[-1, j].unsqueeze(0), x_noisy[:-1, j]], dim=0)
+        x = torch.cat([x_correct, x_noisy], dim=1)
+        x = x.reshape(n, c, h, w)
+        return x
+
 
 
     def sample_task(self):
@@ -122,9 +156,10 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         new_support_x, new_support_y = self._sample_new_support()
         # Add label noise to support set if enabled
         
+        # if self.noise_label and self.noise_ratio > 0:
+        #     new_support_y = self.add_label_noise_to_tensor(new_support_y, self.noise_ratio)
         if self.noise_label and self.noise_ratio > 0:
-            new_support_y = self.add_label_noise_to_tensor(new_support_y, self.noise_ratio)
-        
+            new_support_x = self.add_label_noise_to_x(new_support_x, self.noise_ratio)
         # Query set → Sample from finetune_set:
         #    - Old classes query (old class ids)
         #    - New classes query (new class ids)
@@ -134,6 +169,8 @@ class MemoryTaskDataset(l2l.data.TaskDataset):
         # Merge support
         support_data = torch.cat([memory_x, new_support_x], dim=0)
         support_labels = torch.cat([memory_y, new_support_y], dim=0)
+        # print('support_labels', support_labels)
+        # exit()
         # Merge query
         query_data = torch.cat([old_query_x, new_query_x], dim=0)
         query_labels = torch.cat([old_query_y, new_query_y], dim=0)
