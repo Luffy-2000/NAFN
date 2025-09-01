@@ -138,15 +138,15 @@ def main():
                         f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
                         f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
                         f"--classes-per-set {classes_per_set} "
-                        f"--default_root_dir ../results_rfs_student_bestcombo_LOF_denoise_new/results_rfs_student_{dataset}_{shot}shot_{pre_mode}_{classifier}_{memory_selector}_noise_{noise_ratio}_denoising_LOF "
+                        f"--default_root_dir ../results_rfs_student_bestcombo_IF_denoise/results_rfs_student_{dataset}_{shot}shot_{pre_mode}_{classifier}_{memory_selector}_noise_{noise_ratio}_denoising_IF "
                         f"--network UNet1D2D --base-learner {classifier} --kd-t 1 "
                         f"--teacher-path {teacher_model} --is-distill --memory-selector {memory_selector} "
-                        f"--noise-label --noise-ratio {noise_ratio}  --denoising LOF"  
+                        f"--noise-label --noise-ratio {noise_ratio}  --denoising IF"  
                     )
                     print(student_cmd)
                     # Run student training
                     print(f"\n{'='*50}")
-                    print(f"Running student training for {dataset} with {shot} shots, {pre_mode} pre-mode, {memory_selector} selector, {classifier} classifier, {noise_ratio} noise ratio, denoising LOF")
+                    print(f"Running student training for {dataset} with {shot} shots, {pre_mode} pre-mode, {memory_selector} selector, {classifier} classifier, {noise_ratio} noise ratio, denoising IF")
                     print(f"{'='*50}\n")
                     # exit()
                     run_command(student_cmd)

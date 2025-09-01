@@ -75,8 +75,8 @@ def main():
                         help='If set, add label noise to support set in each episode')
     parser.add_argument('--noise-ratio', type=float, default=0.0,
                         help='Ratio of support samples to corrupt with label noise (default=0.2)')
-    parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF', 'proto_margin'],
-                        help='Denoising method for support set: none (no denoising), LOF (Local Outlier Factor), IF (Isolation Forest)')
+    parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF', 'proto_margin', 'DCML'],
+                        help='Denoising method for support set: none (no denoising), LOF (Local Outlier Factor), IF (Isolation Forest), proto_margin (Prototype Margin), DCML (DCML)')
     args = parser.parse_args()
     dict_args = vars(args)
     

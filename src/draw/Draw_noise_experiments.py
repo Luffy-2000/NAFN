@@ -90,8 +90,8 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
         "w/o Denoise": "o",           # 实心圆
         "ProtoMargin": "^",         # 三角形
         "LOF": "s",              # 方形
-        # "MethodY": "D",              # 菱形
-        # "MethodZ": "v",              # 倒三角
+        "DCML": "D",              # 菱形
+        "IF": "v",              # 倒三角
     }
     # 如果方法名不在字典里，就给个默认 marker
     default_marker = "."
@@ -133,7 +133,7 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
             ax.set_xticks(x_ticks)
             ax.xaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
             ax.yaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
-            ax.legend(fontsize=6, loc='lower left')
+            ax.legend(fontsize=6, loc='lower left', ncol=2)
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(f'./PDF/NoisyLabel Comparison with {clf}.pdf', bbox_inches='tight', facecolor='white', dpi=300)
@@ -148,6 +148,8 @@ if __name__ == "__main__":
     denoise_files = {
         'ProtoMargin': "../metrics/bestcombo_student_metrics_ProtoMargin_denoise.csv",
         'LOF': "../metrics/bestcombo_student_metrics_LOF_denoise_new.csv",
+        'DCML': "../metrics/bestcombo_student_metrics_DCML_denoise.csv",
+        'IF': "../metrics/bestcombo_student_metrics_IF_denoise.csv",
     }
 
     noise_results, denoise_results_dict = read_results_multi(noise_file_path, denoise_files)
