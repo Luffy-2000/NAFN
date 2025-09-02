@@ -130,13 +130,15 @@ def plot_all_distributions(label_counts_dict):
         
         # Set x-axis to log scale with same limits for all subplots
         ax.set_xscale('log')
-        ax.set_xlim(1, max_count * 1.1)  # Add 10% padding
+        ax.set_xlim(1, max_count * 2.0)  # Add 10% padding
         
         # Add labels
         if i == 2:  # Only show x-axis label for the bottom subplot
-            ax.set_xlabel('Number of Biflows', fontsize=14, labelpad=10)
+            ax.set_xlabel('Number of Biflows [log]', fontsize=14, labelpad=10)
+            ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True)
         else:
             ax.set_xlabel('')
+            ax.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
             
         ax.set_ylabel(title, fontsize=14, labelpad=10, fontweight='bold')
         
@@ -152,7 +154,7 @@ def plot_all_distributions(label_counts_dict):
             ax.text(v, i, f' {v:,}', va='center', fontsize=11)
             
         # Hide all x-axis ticks and labels
-        ax.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
+        # ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True)
     
     # Adjust layout with minimal spacing between subplots
     plt.subplots_adjust(hspace=0.05)

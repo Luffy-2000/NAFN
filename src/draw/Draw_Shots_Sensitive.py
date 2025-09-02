@@ -92,7 +92,7 @@ def plot_bar_NN_LR(result_dict, save_dir="./PDF"):
             percent_fmt(ax_high)
             ax_high.grid(axis='y', linestyle='--', alpha=0.6)
             plt.setp(ax_high.get_xticklabels(), visible=False)
-            ax_high.set_ylabel("F1-ALL[%]")
+            ax_high.set_ylabel("F1-All[%]")
             # 低区间轴（下）
             ax_low = fig.add_subplot(gs[1, i], sharex=ax_high)
             bars_low = ax_low.bar(x_pos, means, yerr=stds, capsize=4,

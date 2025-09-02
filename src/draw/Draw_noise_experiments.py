@@ -69,20 +69,20 @@ def _metric_keys_for_classifier(clf):
     """Return the metric key names for a classifier in your dict."""
     if clf == 'NN':
         return {
-            'F1-ALL': 'F1-ALL',
+            'F1-All': 'F1-ALL',
             'F1-New': 'F1-New',
             'F1-Old': 'F1-Old'
         }
     else:  # 'LR'
         return {
-            'F1-ALL': 'F1-ALL',
+            'F1-All': 'F1-ALL',
             'F1-New': 'F1-New',
             'F1-Old': 'F1-Old'
         }
 
 def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False):
     datasets = ['cic2018', 'edge_iiot', 'iot_nid']
-    metrics = ['F1-ALL', 'F1-New', 'F1-Old']
+    metrics = ['F1-All', 'F1-New', 'F1-Old']
     metric_keys = _metric_keys_for_classifier(clf)
 
     # ✅ 方法名称对应的 marker 样式
@@ -90,7 +90,7 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
         "w/o Denoise": "o",           # 实心圆
         "ProtoMargin": "^",         # 三角形
         "LOF": "s",              # 方形
-        "DCML": "D",              # 菱形
+        "E-CL": "D",              # 菱形
         "IF": "v",              # 倒三角
     }
     # 如果方法名不在字典里，就给个默认 marker
@@ -128,27 +128,27 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
                 ax.set_title(metric)
             if c == 0:
                 ax.set_ylabel(ds_pretty)
-            ax.set_xlabel('Noise Ratio')
+            ax.set_xlabel('Noise Ratio', fontsize=11)
             ax.grid(True, alpha=0.3)
             ax.set_xticks(x_ticks)
             ax.xaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
             ax.yaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
-            ax.legend(fontsize=6, loc='lower left', ncol=2)
+            ax.legend(fontsize=10, loc='lower left', ncol=2)
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(f'./PDF/NoisyLabel Comparison with {clf}.pdf', bbox_inches='tight', facecolor='white', dpi=300)
 
 def plot_nn_lr_3x3(data, show_std=False):
     # """生成两张图：第一张 NN（3x3），第二张 LR（3x3）。"""
-    _plot_grid_for_classifier_multi(data, 'NN',  figsize=(12, 5), show_std=show_std)
-    _plot_grid_for_classifier_multi(data, 'LR',  figsize=(12, 5), show_std=show_std)
+    _plot_grid_for_classifier_multi(data, 'NN',  figsize=(15, 6), show_std=show_std)
+    _plot_grid_for_classifier_multi(data, 'LR',  figsize=(15, 6), show_std=show_std)
 
 if __name__ == "__main__":
     noise_file_path = "../metrics/bestcombo_student_metrics_noise_new.csv"
     denoise_files = {
         'ProtoMargin': "../metrics/bestcombo_student_metrics_ProtoMargin_denoise.csv",
         'LOF': "../metrics/bestcombo_student_metrics_LOF_denoise_new.csv",
-        'DCML': "../metrics/bestcombo_student_metrics_DCML_denoise.csv",
+        'E-CL': "../metrics/bestcombo_student_metrics_DCML_denoise.csv",
         'IF': "../metrics/bestcombo_student_metrics_IF_denoise.csv",
     }
 
