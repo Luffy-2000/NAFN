@@ -3,6 +3,8 @@ import subprocess
 import glob
 import argparse
 
+
+
 def find_teacher_model(teacher_dir):
     """Find teacher model file"""
     # Find all version directories
