@@ -4,6 +4,7 @@ import pandas as pd
 from matplotlib.patches import Rectangle
 import pprint
 from matplotlib.ticker import PercentFormatter
+import os
 
 def read_results_multi(noise_file_path, denoise_paths_dict):
     noise_results = pd.read_csv(noise_file_path)
@@ -42,7 +43,7 @@ def map_data_to_dict_multi(noise_results, denoise_results_dict):
                            noise_ds['adaptation_f1_old_macro_std'].tolist()],
             }
 
-            # 多个 denoise 方法
+            # Multiple denoise methods
             for method_name, df in denoise_results_dict.items():
                 method_clf = df.groupby('base_learner').get_group(clf_key)
                 method_ds = method_clf.groupby('dataset').get_group(ds).sort_values(by='noise_ratio')
@@ -85,15 +86,15 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
     metrics = ['F1-All', 'F1-New', 'F1-Old']
     metric_keys = _metric_keys_for_classifier(clf)
 
-    # ✅ 方法名称对应的 marker 样式
+    # ✅ Marker styles corresponding to method names
     marker_map = {
-        "w/o Denoise": "o",           # 实心圆
-        "ProtoMargin": "^",         # 三角形
-        "LOF": "s",              # 方形
-        "E-CL": "D",              # 菱形
-        "IF": "v",              # 倒三角
+        "w/o Denoise": "o",           # Solid circle
+        "ProtoMargin": "^",         # Triangle
+        "LOF": "s",              # Square
+        "E-CL": "D",              # Diamond
+        "IF": "v",              # Inverted triangle
     }
-    # 如果方法名不在字典里，就给个默认 marker
+    # If method name is not in dictionary, use default marker
     default_marker = "."
 
     fig, axes = plt.subplots(3, 3, figsize=figsize)
@@ -109,7 +110,7 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
             ax = axes[r, c]
             key = metric_keys[metric]
 
-            # 遍历方法（除了 noise_ratio）
+            # Iterate through methods (except noise_ratio)
             for method_name, method_data in data[clf][ds].items():
                 if method_name == 'noise_ratio':
                     continue
@@ -139,7 +140,7 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
     plt.savefig(f'./PDF/NoisyLabel Comparison with {clf}.pdf', bbox_inches='tight', facecolor='white', dpi=300)
 
 def plot_nn_lr_3x3(data, show_std=False):
-    # """生成两张图：第一张 NN（3x3），第二张 LR（3x3）。"""
+    # """Generate two plots: first NN (3x3), second LR (3x3)."""
     _plot_grid_for_classifier_multi(data, 'NN',  figsize=(15, 6), show_std=show_std)
     _plot_grid_for_classifier_multi(data, 'LR',  figsize=(15, 6), show_std=show_std)
 
@@ -156,4 +157,5 @@ if __name__ == "__main__":
 
     # exit()
     result_dict = map_data_to_dict_multi(noise_results, denoise_results_dict)
+    # exit()
     plot_nn_lr_3x3(result_dict, show_std=True)

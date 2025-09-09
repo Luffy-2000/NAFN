@@ -4,7 +4,6 @@ import numpy as np
 import os
 import seaborn as sns
 
-# 读取数据
 df_student = pd.read_csv("../metrics/student_metrics_allpre.csv")
 df_teacher = pd.read_csv("../metrics/teacher_metrics_allpre.csv")
 

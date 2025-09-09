@@ -1,0 +1,30 @@
+{
+  "base_dataset": "iot_nid",
+  "replacement_dataset": "edge_iiot",
+  "base_train_classes": [
+    2,
+    7,
+    0,
+    6
+  ],
+  "base_val_classes": [
+    4,
+    3,
+    9
+  ],
+  "base_test_classes": [
+    5,
+    1,
+    8
+  ],
+  "replacement_test_classes": [
+    10,
+    7,
+    6
+  ],
+  "replacement_mapping": {
+    "5": 10,
+    "1": 7,
+    "8": 6
+  }
+}

@@ -1,0 +1,1 @@
+{'benign': 2, 'synflooding': 7, 'ackflooding': 0, 'portscanning': 6, 'httpflooding': 4, 'hostdiscovery': 3, 'udpflooding': 9, 'DDoS LOIC-UDP': 5, 'BruteForce-XSS': 1, 'SQL Injection': 8}

@@ -1,0 +1,1 @@
+{'Benign': 0, 'Bot': 1, 'BruteForce-SSH': 2, 'BruteForce-Web': 3, 'BruteForce-XSS': 4, 'DDoS HOIC': 5, 'DDoS LOIC-HTTP': 6, 'DoS Slowloris': 10, 'osversiondetection': 7, 'arpspoofing': 9, 'telnetbruteforce': 11}

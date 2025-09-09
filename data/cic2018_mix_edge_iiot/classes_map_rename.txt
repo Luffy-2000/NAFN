@@ -1,0 +1,1 @@
+{'DoS GoldenEye': 8, 'DoS Hulk': 9, 'DDoS HOIC': 5, 'Bot': 1, 'BruteForce-SSH': 2, 'Benign': 0, 'DDoS LOIC-HTTP': 6, 'DoS Slowloris': 10, 'BruteForce-Web': 3, 'Ransomware': 7, 'OS_Fingerprinting': 4, 'MITM': 11}
