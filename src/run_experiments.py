@@ -129,18 +129,18 @@ def main():
                     classes_per_set = dataset_configs[dataset]['classes-per-set']
                     print(f"Running student training for {dataset} with {shot} shots, {pre_mode} pre-mode, {memory_selector} selector, {classifier} classifier, {noise_ratio} noise ratio")
 
-                    teacher_dir = f"../results_rfs_teacher_allpre/results_rfs_teacher_{dataset}_10shot_{pre_mode}_{classifier}_{memory_selector}"
+                    teacher_dir = f"../save_files/results_rfs_teacher_allpre/results_rfs_teacher_{dataset}_10shot_{pre_mode}_{classifier}_{memory_selector}"
                     teacher_model = find_teacher_model(teacher_dir)
 
                     # Build student training command
                     student_cmd = (
                         f"python3 main.py --is-fscil --dataset {dataset} "
                         f"--fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots {shot} "
-                        f"--queries 40 --gpus 1 --num-tasks 100 --max_epochs 100 --seed 0 "
+                        f"--queries 40 --gpus 1 --num-tasks 100 --max_epochs 1 --seed 0 "
                         f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
                         f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
                         f"--classes-per-set {classes_per_set} "
-                        f"--default_root_dir ../results_rfs_student_bestcombo_IF_denoise/results_rfs_student_{dataset}_{shot}shot_{pre_mode}_{classifier}_{memory_selector}_noise_{noise_ratio}_denoising_IF "
+                        f"--default_root_dir ../saved_files/results_rfs_student_bestcombo_denoise_test/results_rfs_student_{dataset}_{shot}shot_{pre_mode}_{classifier}_{memory_selector}_noise_{noise_ratio}_denoising_IF "
                         f"--network UNet1D2D --base-learner {classifier} --kd-t 1 "
                         f"--teacher-path {teacher_model} --is-distill --memory-selector {memory_selector} "
                         f"--noise-label --noise-ratio {noise_ratio}  --denoising IF"  

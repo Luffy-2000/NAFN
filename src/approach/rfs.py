@@ -16,28 +16,6 @@ from util.denoising import Denoiser, DenoiseConfig
 EPSILON = 1e-8
 
 
-# class NTXentLoss(nn.Module):
-#     def __init__(self, temperature=0.5):
-#         super(NTXentLoss, self).__init__()
-#         self.temperature = temperature
-#         self.criterion = nn.CrossEntropyLoss()
-        
-#     def forward(self, z_i, z_j):
-#         batch_size = z_i.shape[0]
-#         z_i = F.normalize(z_i, dim=1)
-#         z_j = F.normalize(z_j, dim=1)
-#         features = torch.cat([z_i, z_j], dim=0)
-#         similarity_matrix = F.cosine_similarity(features.unsqueeze(1), features.unsqueeze(0), dim=2) / self.temperature
-#         mask = torch.eye(2 * batch_size, dtype=bool, device=similarity_matrix.device)    
-#         similarity_matrix[mask] = -float('inf')
-#         pos_idx = torch.arange(batch_size, device=similarity_matrix.device)
-#         pos_idx = torch.cat([pos_idx + batch_size, pos_idx], dim=0)
-#         logits = similarity_matrix
-#         labels = pos_idx
-#         loss = self.criterion(logits, labels) / (2 * batch_size)
-#         return loss
-
-
 class LightningRFS(LightningTLModule):
     """
     [[Link to Source Code]](https://github.com/RL-VIG/LibFewShot)
@@ -217,7 +195,6 @@ class LightningRFS(LightningTLModule):
         # Convert back to PyTorch tensor
         return torch.from_numpy(transformed).to(device)
 
-
     def _moco_momentum_update_encoder(self):
         """Momentum update for encoder parameters"""
         for param_q, param_k in zip(self.net.parameters(), self.moco_encoder.parameters()):
@@ -364,12 +341,6 @@ class LightningRFS(LightningTLModule):
         _, feats, _ = self.net(data, return_features=True)
         # print('feats.shape', feats.shape)
         
-        # Split the embedded input
-        # batch_support, batch_query = l2l.data.utils.partition_task(
-        #     feats, labels, shots=self.shots)
-        # batch_support = feats[:way * self.shots]
-        # batch_query = feats[way * self.shots:]
-
         s_embeddings, support_labels = feats[:way * self.shots], labels[:way * self.shots]
         q_embeddings, query_labels = feats[way * self.shots:], labels[way * self.shots:]
         # print('support_labels', support_labels)
@@ -395,7 +366,6 @@ class LightningRFS(LightningTLModule):
         )
         # === End of denoising ===
 
-
         if self.denoising is not 'none':
             # === Record new class distribution and calibrate and supplement ===
             # Need self.dist_calibrator and self.num_old_classes, self.num_new_classes
@@ -412,7 +382,7 @@ class LightningRFS(LightningTLModule):
                 # Calibrate new class distribution
                 mu, sigma = self.dist_calibrator.calibrate(int(cls), features)
                 # Sample and supplement features
-                n_outliers = max(1, int(self.noise_ratio * features.shape[0]))  # Supplement 30% samples
+                n_outliers = max(1, int(self.noise_ratio * self.shots))
                 # n_samples = max(1, int(0.3 * features.shape[0]))  # Supplement 30% samples
                 samples, labels = self.dist_calibrator.sample_from_class(int(cls), n_outliers)
                 new_support_features.append(samples)
@@ -424,9 +394,7 @@ class LightningRFS(LightningTLModule):
                 s_embeddings = torch.cat([s_embeddings, torch.tensor(new_support_features, device=s_embeddings.device, dtype=s_embeddings.dtype)], dim=0)
                 support_labels = torch.cat([support_labels, torch.tensor(new_support_labels, device=support_labels.device, dtype=support_labels.dtype)], dim=0)
             # === End of new class distribution calibration and supplement ===
-
-
-
+        print(f"s_embeddings: {s_embeddings.shape}, support_labels: {support_labels.shape}")
         if self.base_learner == 'lr':
             # Logistic Regressor used to classify the query feats 
             soft_values, y_pred = LR(
@@ -450,7 +418,7 @@ class LightningRFS(LightningTLModule):
         
         else:
             ValueError('Bad base learner')
-           
+
         # if self.base_learner == 'lr': 
         #     # Since 'lr' and 'h' do not produce soft values, 
         #     # one-hot encoding of predictions is performed.
