@@ -147,10 +147,10 @@ def plot_nn_lr_3x3(data, show_std=False):
 if __name__ == "__main__":
     noise_file_path = "../metrics/bestcombo_student_metrics_noise_new.csv"
     denoise_files = {
-        'ProtoMargin': "../metrics/bestcombo_student_metrics_ProtoMargin_denoise.csv",
-        'LOF': "../metrics/bestcombo_student_metrics_LOF_denoise_new.csv",
-        'E-CL': "../metrics/bestcombo_student_metrics_DCML_denoise.csv",
-        'IF': "../metrics/bestcombo_student_metrics_IF_denoise.csv",
+        'ProtoMargin': "../metrics/bestcombo_student_metrics_ProtoMargin_denoise_new.csv",
+        'LOF': "../metrics/bestcombo_student_metrics_LOF_denoise_new_2.csv",
+        'E-CL': "../metrics/bestcombo_student_metrics_DCML_denoise_new.csv",
+        'IF': "../metrics/bestcombo_student_metrics_IF_denoise_new.csv",
     }
 
     noise_results, denoise_results_dict = read_results_multi(noise_file_path, denoise_files)

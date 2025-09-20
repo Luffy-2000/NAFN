@@ -394,7 +394,7 @@ class LightningRFS(LightningTLModule):
                 s_embeddings = torch.cat([s_embeddings, torch.tensor(new_support_features, device=s_embeddings.device, dtype=s_embeddings.dtype)], dim=0)
                 support_labels = torch.cat([support_labels, torch.tensor(new_support_labels, device=support_labels.device, dtype=support_labels.dtype)], dim=0)
             # === End of new class distribution calibration and supplement ===
-        print(f"s_embeddings: {s_embeddings.shape}, support_labels: {support_labels.shape}")
+
         if self.base_learner == 'lr':
             # Logistic Regressor used to classify the query feats 
             soft_values, y_pred = LR(
