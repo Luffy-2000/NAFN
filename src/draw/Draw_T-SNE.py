@@ -54,11 +54,12 @@ def plot_four_subplots_queries(four_folders, output_dir):
     labels = None  # Will be created when we know the actual number of classes
     
     # Create figure with 4 subplots
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-    sn.set_theme(font_scale=1.0)
+    fig, axes = plt.subplots(1, 4, figsize=(16, 3))
+    sn.set_theme(font_scale=1.5, style="whitegrid")  # Use whitegrid style for consistent grid
     
     # Subplot titles
-    subplot_titles = ['NN-Noise', 'NN-Denoise', 'LR-Noise', 'LR-Denoise']
+    subplot_titles = ['NN - W/o Denoising', 'NN - ProtoMargin', 
+                      'LR - W/o Denoising', 'LR - ProtoMargin']
     
     # Store all unique labels for global legend
     all_labels = set()
@@ -74,14 +75,23 @@ def plot_four_subplots_queries(four_folders, output_dir):
             # Check if files exist
             if not all(os.path.exists(f) for f in [query_file_supports, query_file_queries, query_file_labels]):
                 print(f"Missing files in {folder_path}")
-                axes[i].text(0.5, 0.5, 'Missing Data', ha='center', va='center', transform=axes[i].transAxes)
-                axes[i].set_title(subplot_titles[i], fontsize=12, weight='bold')
+                axes[i].text(0.5, 0.5, 'Missing Data', ha='center', va='center', transform=axes[i].transAxes, fontsize=16)
+                # Set consistent grid style for all subplots
+                axes[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+                axes[i].set_facecolor('white')  # Ensure white background
+                # Set consistent border style for all subplots
+                for spine in axes[i].spines.values():
+                    spine.set_edgecolor('black')
+                    spine.set_linewidth(1.0)
+                axes[i].text(0.5, -0.15, subplot_titles[i], ha='center', va='top', 
+                            transform=axes[i].transAxes, fontsize=16)
                 continue
             
             # Read the features from npz files
             df_supports = np.load(query_file_supports)['supports']
             df_support_labels = np.load(query_file_labels)['support_labels']
-
+            # print(df_support_labels[0])
+            # exit()
             # Flatten the data for processing
             supports_flat = df_supports.reshape(-1, df_supports.shape[-1])
             support_labels_flat = df_support_labels.flatten()
@@ -89,13 +99,15 @@ def plot_four_subplots_queries(four_folders, output_dir):
             # Create label mapping
             unique_labels = np.unique(support_labels_flat)
             n_classes = len(unique_labels)
-            print(f"  Number of classes: {n_classes}")
+            # print(f"  Number of classes: {n_classes}")
             # exit()
             # For support plots, only use the last 3 classes (new classes)
             if len(unique_labels) >= 3:
                 # Get the last 3 unique labels
                 last_3_labels = unique_labels[-3:]
                 print(f"  Using last 3 classes: {last_3_labels}")
+                # Store the starting index for letter mapping before filtering
+                start_letter_idx = len(unique_labels) - 3
                 # Filter data to only include these 3 classes
                 mask = np.isin(support_labels_flat, last_3_labels)
                 supports_flat = supports_flat[mask]
@@ -105,24 +117,30 @@ def plot_four_subplots_queries(four_folders, output_dir):
                 print(f"  Filtered data shape: {supports_flat.shape}, labels: {len(support_labels_flat)}")
             else:
                 print(f"  Warning: Only {len(unique_labels)} classes found, using all classes")
-            
+                start_letter_idx = 0
+            # print(f"Unique labels: {unique_labels}")
+            # print(f"Support labels: {support_labels_flat}")
+            # print(f"Supports labels shape: {support_labels_flat.shape}")
+            # print(f"Supports flat: {supports_flat}")
+            # exit()
             # Create labels dynamically based on dataset and actual number of classes
+            # For the last 3 classes, we need to map them to the corresponding letters
             if dataset == 'cic2018':
-                # CIC2018: use lowercase letters
-                labels = [chr(ord('a') + i) for i in range(n_classes)]
+                # CIC2018: use lowercase letters - map to last 3 letters
+                labels = [chr(ord('a') + start_letter_idx + i) for i in range(n_classes)]
             elif dataset == 'edge_iiot':
-                # Edge-IIoT: use script style letters
-                labels = [f'$\\mathscr{{{chr(ord("A") + i)}}}$' for i in range(n_classes)]
+                # Edge-IIoT: use script style letters - map to last 3 letters
+                labels = [f'$\\mathscr{{{chr(ord("A") + start_letter_idx + i)}}}$' for i in range(n_classes)]
             elif dataset == 'iot_nid':
-                # IoT-NID: use Greek letters
+                # IoT-NID: use Greek letters - map to last 3 letters
                 greek_letters = ['$\\alpha$', '$\\beta$', '$\\gamma$', '$\\delta$', '$\\epsilon$', '$\\zeta$', 
                                 '$\\eta$', '$\\theta$', '$\\iota$', '$\\kappa$', '$\\lambda$', '$\\mu$',
                                 '$\\nu$', '$\\xi$', '$\\omicron$', '$\\pi$', '$\\rho$', '$\\sigma$',
                                 '$\\tau$', '$\\upsilon$', '$\\phi$', '$\\chi$', '$\\psi$', '$\\omega$']
-                labels = [greek_letters[i] if i < len(greek_letters) else f'$\\alpha_{{{i-len(greek_letters)+1}}}$' for i in range(n_classes)]
+                labels = [greek_letters[start_letter_idx + i] if start_letter_idx + i < len(greek_letters) else f'$\\alpha_{{{start_letter_idx + i - len(greek_letters) + 1}}}$' for i in range(n_classes)]
             else:
-                # Default: use lowercase letters
-                labels = [chr(ord('a') + i) for i in range(n_classes)]
+                # Default: use lowercase letters - map to last 3 letters
+                labels = [chr(ord('a') + start_letter_idx + i) for i in range(n_classes)]
             
             label_map = {label: labels[j] for j, label in enumerate(unique_labels)}
             support_labels_mapped = [label_map[label] for label in support_labels_flat]
@@ -152,15 +170,33 @@ def plot_four_subplots_queries(four_folders, output_dir):
                       hue_order=hue_order, palette=palette, ax=axes[i], legend=False)
             
             # Set subplot properties
-            axes[i].set_title(subplot_titles[i], fontsize=12, weight='bold')
             axes[i].set_xlabel('')
             axes[i].set_ylabel('')
-            axes[i].tick_params(labelsize=8)
+            axes[i].tick_params(labelsize=16)
+            # Set consistent grid style for all subplots
+            axes[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+            axes[i].set_facecolor('white')  # Ensure white background
+            # Set consistent border style for all subplots
+            for spine in axes[i].spines.values():
+                spine.set_edgecolor('black')
+                spine.set_linewidth(1.0)
+            
+            # Add title at the bottom of the subplot
+            axes[i].text(0.5, -0.20, subplot_titles[i], ha='center', va='top', 
+                        transform=axes[i].transAxes, fontsize=20)
             
         except Exception as e:
             print(f"Error processing {folder_path}: {e}")
-            axes[i].text(0.5, 0.5, 'Error', ha='center', va='center', transform=axes[i].transAxes)
-            axes[i].set_title(subplot_titles[i], fontsize=12, weight='bold')
+            axes[i].text(0.5, 0.5, 'Error', ha='center', va='center', transform=axes[i].transAxes, fontsize=16)
+            # Set consistent grid style for all subplots
+            axes[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+            axes[i].set_facecolor('white')  # Ensure white background
+            # Set consistent border style for all subplots
+            for spine in axes[i].spines.values():
+                spine.set_edgecolor('black')
+                spine.set_linewidth(1.0)
+            axes[i].text(0.5, -0.15, subplot_titles[i], ha='center', va='top', 
+                        transform=axes[i].transAxes, fontsize=16)
     
     # Create global legend at the top
     if all_labels:
@@ -171,19 +207,19 @@ def plot_four_subplots_queries(four_folders, output_dir):
         # For KDE, use patches
         import matplotlib.patches as mpatches
         legend_handles = [
-            mpatches.Patch(facecolor=palette[i], alpha=0.6, linewidth=0.1)
+            mpatches.Patch(facecolor=palette[i], alpha=0.7, linewidth=0.2, edgecolor='black')
             for i, _ in enumerate(sorted_labels)
         ]
         
-        # Add legend at the top, moved higher and in 2 rows
+        # Add legend at the top, make it larger and more prominent
         fig.legend(legend_handles, sorted_labels, 
-                  loc='upper center', bbox_to_anchor=(0.5, 1.02), 
-                  ncol=(n_unique_labels + 1) // 2, fontsize=10,  # 2 rows
-                  prop={'weight': 'bold'})
+                  loc='upper center', bbox_to_anchor=(0.5, 1.00), 
+                  ncol=3, fontsize=22, frameon=False, prop={'weight': 'bold', 'size': 20}, 
+                  markerscale=2.0, handlelength=2.0, handletextpad=0.8)
     
     # Adjust layout
     plt.tight_layout()
-    plt.subplots_adjust(top=0.75)  # Make more room for legend
+    plt.subplots_adjust(top=0.8, bottom=0.15)  # Make more room for legend and bottom titles
     
     # Generate output filename
     base_name = f"supports_kde_four_subplots"
@@ -207,7 +243,11 @@ def find_four_folders_for_dataset(dataset_name, base_dirs):
     Returns:
         - list: Four folder paths in the specified order
     """
-    four_folders = []
+    # Initialize lists to store folders of each type
+    nn_noise_folders = []
+    nn_denoise_folders = []
+    lr_noise_folders = []
+    lr_denoise_folders = []
     
     for base_dir in base_dirs:
         if not os.path.exists(base_dir):
@@ -223,34 +263,43 @@ def find_four_folders_for_dataset(dataset_name, base_dirs):
         # Sort folders to ensure consistent order
         matching_folders.sort()
         
-        # Categorize folders by type
-        nn_noise_folders = [f for f in matching_folders if 'nn' in f and 'noise' in f and 'denoise' not in f]
-        nn_denoise_folders = [f for f in matching_folders if 'nn' in f and 'denoise' in f]
-        lr_noise_folders = [f for f in matching_folders if 'lr' in f and 'noise' in f and 'denoise' not in f]
-        lr_denoise_folders = [f for f in matching_folders if 'lr' in f and 'denoise' in f]
+        # Categorize folders by type and add to global lists
+        current_nn_noise = [f for f in matching_folders if 'nn' in f and 'noise' in f and 'denoise' not in f]
+        current_nn_denoise = [f for f in matching_folders if 'nn' in f and 'denoise' in f]
+        current_lr_noise = [f for f in matching_folders if 'lr' in f and 'noise' in f and 'denoise' not in f]
+        current_lr_denoise = [f for f in matching_folders if 'lr' in f and 'denoise' in f]
         
-        print(f"  Found {len(nn_noise_folders)} NN-Noise folders:")
-        for f in nn_noise_folders:
-            print(f"    - {os.path.basename(f)}")
-        print(f"  Found {len(nn_denoise_folders)} NN-Denoise folders:")
-        for f in nn_denoise_folders:
-            print(f"    - {os.path.basename(f)}")
-        print(f"  Found {len(lr_noise_folders)} LR-Noise folders:")
-        for f in lr_noise_folders:
-            print(f"    - {os.path.basename(f)}")
-        print(f"  Found {len(lr_denoise_folders)} LR-Denoise folders:")
-        for f in lr_denoise_folders:
-            print(f"    - {os.path.basename(f)}")
-        
-        # Add the first matching folder of each type
-        if nn_noise_folders:
-            four_folders.append(nn_noise_folders[0])
-        if nn_denoise_folders:
-            four_folders.append(nn_denoise_folders[0])
-        if lr_noise_folders:
-            four_folders.append(lr_noise_folders[0])
-        if lr_denoise_folders:
-            four_folders.append(lr_denoise_folders[0])
+        # Add to global lists
+        nn_noise_folders.extend(current_nn_noise)
+        nn_denoise_folders.extend(current_nn_denoise)
+        lr_noise_folders.extend(current_lr_noise)
+        lr_denoise_folders.extend(current_lr_denoise)
+    
+    # Print found folders
+    print(f"  Found {len(nn_noise_folders)} NN-Noise folders:")
+    for f in nn_noise_folders:
+        print(f"    - {os.path.basename(f)}")
+    print(f"  Found {len(nn_denoise_folders)} NN-Denoise folders:")
+    for f in nn_denoise_folders:
+        print(f"    - {os.path.basename(f)}")
+    print(f"  Found {len(lr_noise_folders)} LR-Noise folders:")
+    for f in lr_noise_folders:
+        print(f"    - {os.path.basename(f)}")
+    print(f"  Found {len(lr_denoise_folders)} LR-Denoise folders:")
+    for f in lr_denoise_folders:
+        print(f"    - {os.path.basename(f)}")
+    
+    # Build four_folders list in the correct order
+    four_folders = []
+    # Order: nn_noise, nn_denoise, lr_noise, lr_denoise
+    if nn_noise_folders:
+        four_folders.append(nn_noise_folders[0])
+    if nn_denoise_folders:
+        four_folders.append(nn_denoise_folders[0])
+    if lr_noise_folders:
+        four_folders.append(lr_noise_folders[0])
+    if lr_denoise_folders:
+        four_folders.append(lr_denoise_folders[0])
     
     return four_folders
 
@@ -258,7 +307,7 @@ if __name__ == "__main__":
     # Base directories to search in
     base_dirs = [
         "../save_files/results_rfs_student_bestcombo_noise_new",
-        "../save_files/results_rfs_student_bestcombo_ProtoMargin_denoise"
+        "../save_files/results_rfs_student_bestcombo_ProtoMargin_denoise_new"
     ]
     
     # Find four folders for each dataset

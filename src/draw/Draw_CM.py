@@ -146,7 +146,7 @@ def find_and_plot_all_cm_files(save_files_dir):
 
 if __name__ == "__main__":
     # Example usage
-    save_files_dir = "../save_files/results_rfs_student_bestcombo_noise_new"
+    save_files_dir = "../save_files/results_rfs_student_bestcombo_ProtoMargin_denoise_new"
     # output_dir = "./PDF"
     # Create PDF directory if it doesn't exist
     # os.makedirs(output_dir, exist_ok=True)

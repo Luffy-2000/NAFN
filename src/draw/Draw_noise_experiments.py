@@ -154,7 +154,9 @@ if __name__ == "__main__":
     }
 
     noise_results, denoise_results_dict = read_results_multi(noise_file_path, denoise_files)
-
+    print(noise_results)
+    print(denoise_results_dict)
+    exit()
     # exit()
     result_dict = map_data_to_dict_multi(noise_results, denoise_results_dict)
     # exit()
