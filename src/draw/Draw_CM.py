@@ -100,6 +100,12 @@ def plot_confusion_matrix_from_csv(csv_path, output_dir):
     ax.set_xticklabels(ax.get_xticklabels(), rotation=0, fontsize=30, weight='bold')
     ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=30, weight='bold')
     
+        # 调整 colorbar 字体大小
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=25)  # 调整刻度字体大小
+    cbar.ax.yaxis.label.set_size(28)   # 调整 colorbar 标签字体大小
+    cbar.ax.yaxis.label.set_weight('bold')
+
     # Add vertical and horizontal lines to separate old and new classes
     if line_x < n_classes:
         plt.axvline(x=line_x, linewidth=7, color='white', linestyle='-')
@@ -146,7 +152,7 @@ def find_and_plot_all_cm_files(save_files_dir):
 
 if __name__ == "__main__":
     # Example usage
-    save_files_dir = "../save_files/results_rfs_student_bestcombo_ProtoMargin_denoise_new"
+    save_files_dir = "../../save_files/results_rfs_student_bestcombo_noise_new"
     # output_dir = "./PDF"
     # Create PDF directory if it doesn't exist
     # os.makedirs(output_dir, exist_ok=True)

@@ -96,8 +96,8 @@ def main():
                    'iot_nid_mix_cic2018',
                    'iot_nid_mix_edge_iiot']
     
-    # for mix_dataset in mix_datasets:
-    for dataset in args.datasets:
+    for mix_dataset in mix_datasets:
+    # for dataset in args.datasets:
         for shot in args.shots:
             # for pre_mode in args.pre_modes:
             for classifier in args.classifier:
@@ -122,13 +122,13 @@ def main():
                     # print(f"Running teacher training for {dataset} with {shot} shots, {pre_mode} pre-mode, {memory_selector} selector")
                     # print(f"{'='*50}\n")
                     # run_command(teacher_cmd)
-                # dataset = mix_dataset.split('_mix_')[0]
+                    dataset = mix_dataset.split('_mix_')[0]
                 
                     # Find teacher model file
                     pre_mode = dataset_configs[dataset][classifier]['pre-mode']
                     memory_selector = dataset_configs[dataset][classifier]['memory_selection']
                     classes_per_set = dataset_configs[dataset]['classes-per-set']
-                    print(f"Running student training for {dataset} with {shot} shots, {pre_mode} pre-mode, {memory_selector} selector, {classifier} classifier, {noise_ratio} noise ratio, denoising DCML")
+                    print(f"Running student training for {mix_dataset} with {shot} shots, {pre_mode} pre-mode, {memory_selector} selector, {classifier} classifier, {noise_ratio} noise ratio, proto_margin denoising")
 
 
                     teacher_dir = f"../save_files/results_rfs_teacher_allpre/results_rfs_teacher_{dataset}_10shot_{pre_mode}_{classifier}_{memory_selector}"
@@ -136,22 +136,22 @@ def main():
 
                     # Build student training command
                     student_cmd = (
-                        f"python3 main.py --is-fscil --dataset {dataset} "
+                        f"python3 main.py --is-fscil --dataset {mix_dataset} "
                         f"--fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots {shot} "
                         f"--queries 40 --gpus 1 --num-tasks 100 --max_epochs 100 --seed 0 "
                         f"--approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 "
                         f"--mode max --double-monitor --lr 0.0001 --lr-strat none "
                         f"--classes-per-set {classes_per_set} "
-                        f"--default_root_dir ../save_files/results_rfs_student_bestcombo_DCML_denoise_new/results_rfs_student_{dataset}_{shot}shot_{pre_mode}_{classifier}_{memory_selector}_noise_{noise_ratio}_denoising_DCML "
+                        f"--default_root_dir ../save_files/results_rfs_student_bestcombo_mix_dataset_ProtoMargin_denoising/results_rfs_student_{mix_dataset}_{shot}shot_{pre_mode}_{classifier}_{memory_selector}_noise_{noise_ratio} "
                         f"--network UNet1D2D --base-learner {classifier} --kd-t 1 "
                         f"--teacher-path {teacher_model} --is-distill --memory-selector {memory_selector} "
-                        f"--noise-label --noise-ratio {noise_ratio}  --denoising DCML"  
+                        f"--noise-label --noise-ratio {noise_ratio} --denoising proto_margin"  
                     )
                     print(student_cmd)
 
                     # Run student training
                     print(f"\n{'='*50}")
-                    print(f"Running student training for {dataset} with {shot} shots, {pre_mode} pre-mode, {memory_selector} selector, {classifier} classifier, {noise_ratio} noise ratio, denoising DCML")
+                    print(f"Running student training for {mix_dataset} with {shot} shots, {pre_mode} pre-mode, {memory_selector} selector, {classifier} classifier, {noise_ratio} noise ratio, proto_margin denoising")
                     print(f"{'='*50}\n")
                     
                     run_command(student_cmd)

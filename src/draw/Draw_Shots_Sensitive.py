@@ -98,7 +98,7 @@ def plot_bar_NN_LR(result_dict, save_dir="./PDF"):
             bars_low = ax_low.bar(x_pos, means, yerr=stds, capsize=4,
                                   alpha=0.85, edgecolor="black", color="skyblue")
             ax_low.set_ylim(*low_ylim)
-            ax_low.set_xlabel("Shots", fontsize=12)
+            ax_low.set_xlabel("K", fontsize=12)
             ax_low.set_xticks(x_pos)
             ax_low.set_xticklabels(shots)
             percent_fmt(ax_low)

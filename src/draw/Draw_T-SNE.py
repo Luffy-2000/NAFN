@@ -58,8 +58,8 @@ def plot_four_subplots_queries(four_folders, output_dir):
     sn.set_theme(font_scale=1.5, style="whitegrid")  # Use whitegrid style for consistent grid
     
     # Subplot titles
-    subplot_titles = ['NN - W/o Denoising', 'NN - ProtoMargin', 
-                      'LR - W/o Denoising', 'LR - ProtoMargin']
+    subplot_titles = ['NN - W/o NAFN', 'NN - NAFN (ProtoMargin)', 
+                      'LR - W/o NAFN', 'LR - NAFN (ProtoMargin)']
     
     # Store all unique labels for global legend
     all_labels = set()
@@ -84,7 +84,7 @@ def plot_four_subplots_queries(four_folders, output_dir):
                     spine.set_edgecolor('black')
                     spine.set_linewidth(1.0)
                 axes[i].text(0.5, -0.15, subplot_titles[i], ha='center', va='top', 
-                            transform=axes[i].transAxes, fontsize=16)
+                            transform=axes[i].transAxes, fontsize=20)
                 continue
             
             # Read the features from npz files
@@ -172,7 +172,7 @@ def plot_four_subplots_queries(four_folders, output_dir):
             # Set subplot properties
             axes[i].set_xlabel('')
             axes[i].set_ylabel('')
-            axes[i].tick_params(labelsize=16)
+            axes[i].tick_params(labelsize=20)
             # Set consistent grid style for all subplots
             axes[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
             axes[i].set_facecolor('white')  # Ensure white background
@@ -196,7 +196,7 @@ def plot_four_subplots_queries(four_folders, output_dir):
                 spine.set_edgecolor('black')
                 spine.set_linewidth(1.0)
             axes[i].text(0.5, -0.15, subplot_titles[i], ha='center', va='top', 
-                        transform=axes[i].transAxes, fontsize=16)
+                        transform=axes[i].transAxes, fontsize=20)
     
     # Create global legend at the top
     if all_labels:
@@ -214,7 +214,7 @@ def plot_four_subplots_queries(four_folders, output_dir):
         # Add legend at the top, make it larger and more prominent
         fig.legend(legend_handles, sorted_labels, 
                   loc='upper center', bbox_to_anchor=(0.5, 1.00), 
-                  ncol=3, fontsize=22, frameon=False, prop={'weight': 'bold', 'size': 20}, 
+                  ncol=3, fontsize=22, frameon=False, prop={'size': 22, 'weight': 'bold'}, 
                   markerscale=2.0, handlelength=2.0, handletextpad=0.8)
     
     # Adjust layout
@@ -306,8 +306,8 @@ def find_four_folders_for_dataset(dataset_name, base_dirs):
 if __name__ == "__main__":
     # Base directories to search in
     base_dirs = [
-        "../save_files/results_rfs_student_bestcombo_noise_new",
-        "../save_files/results_rfs_student_bestcombo_ProtoMargin_denoise_new"
+        "../../save_files/results_rfs_student_bestcombo_noise_new",
+        "../../save_files/results_rfs_student_bestcombo_ProtoMargin_denoise_new"
     ]
     
     # Find four folders for each dataset

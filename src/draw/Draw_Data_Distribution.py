@@ -71,37 +71,121 @@ def get_attack_type(label):
         print(f"Other type label: {label}")
         return 'other'
 
+# def plot_all_distributions(label_counts_dict):
+#     """Plot all dataset distributions in one figure"""
+#     # Set style
+#     plt.style.use('seaborn')
+    
+#     # Create figure with white background
+#     fig, axes = plt.subplots(3, 1, figsize=(6, 10), facecolor='white')
+    
+#     # Find the maximum count across all datasets
+#     max_count = max([max(counts.values) for counts in label_counts_dict.values()])
+    
+#     # Define patterns for different attack types
+#     patterns = {
+#         'ddos': '/',
+#         'dos': '\\'
+#     }
+    
+#     # Count attack types across all datasets
+#     all_attack_types = {}
+#     for label_counts in label_counts_dict.values():
+#         if label_counts is None:
+#             continue
+#         for label in label_counts.index:
+#             attack_type = get_attack_type(label)
+#             all_attack_types[attack_type] = all_attack_types.get(attack_type, 0) + 1
+    
+#     print("Attack types across all datasets:", all_attack_types)
+    
+#     # Plot each dataset
+#     for i, ((title, label_counts), ax) in enumerate(zip(label_counts_dict.items(), axes)):
+#         if label_counts is None:
+#             continue
+            
+#         # Get friendly names for the dataset
+#         friendly_names = name.get(title, [])
+        
+#         # Create color list based on whether the label is benign or not
+#         colors = ['#2ecc71' if is_benign(label) else '#e74c3c' for label in label_counts.index]
+        
+#         # Create horizontal bar plot with reversed y-axis
+#         y_pos = np.arange(len(label_counts))
+#         bars = ax.barh(y_pos, label_counts.values, color=colors, height=1.0, edgecolor='white', linewidth=0.5)
+        
+#         # Add patterns to bars based on attack type
+#         for bar, label in zip(bars, label_counts.index):
+#             attack_type = get_attack_type(label)
+#             # Only add pattern for DoS and DDoS attacks
+#             if attack_type in ['dos', 'ddos']:
+#                 bar.set_hatch(patterns[attack_type])
+        
+#         # Set y-axis labels and reverse the order
+#         ax.set_yticks(y_pos)
+#         # Use friendly names if available, otherwise use original labels
+#         y_labels = [friendly_names[i] if i < len(friendly_names) else label for i, label in enumerate(label_counts.index)]
+#         ax.set_yticklabels(y_labels, fontsize=12)
+#         ax.invert_yaxis()  # This will put the highest count at the top
+        
+#         # Set x-axis to log scale with same limits for all subplots
+#         ax.set_xscale('log')
+#         ax.set_xlim(1, max_count * 2.0)  # Add 10% padding
+        
+#         # Add labels
+#         if i == 2:  # Only show x-axis label for the bottom subplot
+#             ax.set_xlabel('Number of Biflows [log]', fontsize=14, labelpad=10)
+#             ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True)
+#         else:
+#             ax.set_xlabel('')
+#             ax.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
+            
+#         ax.set_ylabel(title, fontsize=14, labelpad=10, fontweight='bold')
+        
+#         # Add grid
+#         ax.grid(True, axis='x', linestyle='--', alpha=0.3)
+        
+#         # Remove top and right spines
+#         ax.spines['top'].set_visible(False)
+#         ax.spines['right'].set_visible(False)
+        
+#         # Add value labels on the bars
+#         for i, v in enumerate(label_counts.values):
+#             ax.text(v, i, f' {v:,}', va='center', fontsize=11)
+            
+#         # Hide all x-axis ticks and labels
+#         # ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True)
+    
+#     # Adjust layout with minimal spacing between subplots
+#     plt.subplots_adjust(hspace=0.05)
+    
+#     # Save figure with high DPI
+#     if not os.path.exists('./PDF'):
+#         os.makedirs('./PDF')
+#     plt.savefig('./PDF/data_distribution_all.pdf', bbox_inches='tight', facecolor='white')
+#     plt.close()
+
 def plot_all_distributions(label_counts_dict):
     """Plot all dataset distributions in one figure"""
-    # Set style
+    # 保留原来的风格设置
     plt.style.use('seaborn')
     
     # Create figure with white background
     fig, axes = plt.subplots(3, 1, figsize=(6, 10), facecolor='white')
     
-    # Find the maximum count across all datasets
-    max_count = max([max(counts.values) for counts in label_counts_dict.values()])
+    # Find the maximum count across all datasets（容错处理，防止为空）
+    valid_counts = [counts for counts in label_counts_dict.values() if counts is not None and len(counts) > 0]
+    if not valid_counts:
+        print("No valid label distributions to plot.")
+        return
+    max_count = max([max(counts.values) for counts in valid_counts])
     
-    # Define patterns for different attack types
-    patterns = {
-        'ddos': '/',
-        'dos': '\\'
-    }
-    
-    # Count attack types across all datasets
-    all_attack_types = {}
-    for label_counts in label_counts_dict.values():
-        if label_counts is None:
-            continue
-        for label in label_counts.index:
-            attack_type = get_attack_type(label)
-            all_attack_types[attack_type] = all_attack_types.get(attack_type, 0) + 1
-    
-    print("Attack types across all datasets:", all_attack_types)
+    # 取消：按攻击类型统计与添加阴影（原先针对 DoS/DDoS 的逻辑已移除）
     
     # Plot each dataset
-    for i, ((title, label_counts), ax) in enumerate(zip(label_counts_dict.items(), axes)):
-        if label_counts is None:
+    for ax_idx, ((title, label_counts), ax) in enumerate(zip(label_counts_dict.items(), axes)):
+        if label_counts is None or len(label_counts) == 0:
+            ax.axis('off')
             continue
             
         # Get friendly names for the dataset
@@ -112,14 +196,14 @@ def plot_all_distributions(label_counts_dict):
         
         # Create horizontal bar plot with reversed y-axis
         y_pos = np.arange(len(label_counts))
-        bars = ax.barh(y_pos, label_counts.values, color=colors, height=1.0, edgecolor='white', linewidth=0.5)
+        bars = ax.barh(y_pos, label_counts.values, color=colors, height=1.0, edgecolor='black', linewidth=1.2)
         
-        # Add patterns to bars based on attack type
-        for bar, label in zip(bars, label_counts.index):
-            attack_type = get_attack_type(label)
-            # Only add pattern for DoS and DDoS attacks
-            if attack_type in ['dos', 'ddos']:
-                bar.set_hatch(patterns[attack_type])
+        # ===== 新逻辑：给每个数据集的“最后三个类”加阴影 =====
+        n = len(label_counts)
+        start_idx = max(0, n - 3)  # 若不足3类，则从0开始
+        for j, bar in enumerate(bars):
+            if j >= start_idx:
+                bar.set_hatch('XX')  # 需要其他样式可改成 '///', 'xx', '++' 等
         
         # Set y-axis labels and reverse the order
         ax.set_yticks(y_pos)
@@ -130,10 +214,10 @@ def plot_all_distributions(label_counts_dict):
         
         # Set x-axis to log scale with same limits for all subplots
         ax.set_xscale('log')
-        ax.set_xlim(1, max_count * 2.0)  # Add 10% padding
+        ax.set_xlim(1, max_count * 2.0)  # 适当留白
         
         # Add labels
-        if i == 2:  # Only show x-axis label for the bottom subplot
+        if ax_idx == 2:  # Only show x-axis label for the bottom subplot
             ax.set_xlabel('Number of Biflows [log]', fontsize=14, labelpad=10)
             ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True)
         else:
@@ -143,18 +227,16 @@ def plot_all_distributions(label_counts_dict):
         ax.set_ylabel(title, fontsize=14, labelpad=10, fontweight='bold')
         
         # Add grid
-        ax.grid(True, axis='x', linestyle='--', alpha=0.3)
-        
-        # Remove top and right spines
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        
+        # ax.set_axisbelow(False)
+        # ax.grid(True, which='major', axis='x', linestyle='--', alpha=0.8, zorder=5)
+        # # ax.grid(True, which='minor', axis='x', linestyle=':', alpha=0.2, zorder=5)
+        ax.set_axisbelow(False)
+        ax.grid(True, which='major', axis='x', linestyle='--', alpha=1.0, zorder=5, color='gray')
+        ax.grid(False, axis='y')  # hide y-axis gridlines
+
         # Add value labels on the bars
-        for i, v in enumerate(label_counts.values):
-            ax.text(v, i, f' {v:,}', va='center', fontsize=11)
-            
-        # Hide all x-axis ticks and labels
-        # ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True)
+        for i_row, v in enumerate(label_counts.values):
+            ax.text(v, i_row, f' {v:,}', va='center', fontsize=11)
     
     # Adjust layout with minimal spacing between subplots
     plt.subplots_adjust(hspace=0.05)
@@ -162,8 +244,9 @@ def plot_all_distributions(label_counts_dict):
     # Save figure with high DPI
     if not os.path.exists('./PDF'):
         os.makedirs('./PDF')
-    plt.savefig('./PDF/data_distribution_all.pdf', bbox_inches='tight', facecolor='white')
+    plt.savefig('./PDF/data_distribution_all_without_y_axis.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
+
 
 def main():
     # Dataset paths and their label columns
