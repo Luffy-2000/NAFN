@@ -43,6 +43,7 @@ def plot_four_subplots_queries(four_folders, output_dir):
         - four_folders (list): List of four folder paths in order
         - output_dir (str): Directory to save the PDF file
     """
+    
     # Extract dataset name from first folder
     match = re.search(re.compile(r'cic2018|edge_iiot|iot_nid'), four_folders[0])
     if match:
@@ -53,9 +54,9 @@ def plot_four_subplots_queries(four_folders, output_dir):
     # We'll create labels dynamically based on actual data
     labels = None  # Will be created when we know the actual number of classes
     
+    sn.set_theme(font_scale=1.5, style="whitegrid")
     # Create figure with 4 subplots
-    fig, axes = plt.subplots(1, 4, figsize=(16, 3))
-    sn.set_theme(font_scale=1.5, style="whitegrid")  # Use whitegrid style for consistent grid
+    fig, axes = plt.subplots(1, 4, figsize=(24, 5))
     
     # Subplot titles
     subplot_titles = ['NN - W/o NAFN', 'NN - NAFN (ProtoMargin)', 
@@ -84,7 +85,7 @@ def plot_four_subplots_queries(four_folders, output_dir):
                     spine.set_edgecolor('black')
                     spine.set_linewidth(1.0)
                 axes[i].text(0.5, -0.15, subplot_titles[i], ha='center', va='top', 
-                            transform=axes[i].transAxes, fontsize=20)
+                            transform=axes[i].transAxes, fontsize=26)
                 continue
             
             # Read the features from npz files
@@ -169,34 +170,48 @@ def plot_four_subplots_queries(four_folders, output_dir):
                       levels=5, thresh=0.1, alpha=0.5, warn_singular=False, bw_method=0.5,
                       hue_order=hue_order, palette=palette, ax=axes[i], legend=False)
             
-            # Set subplot properties
+            # Remove all axes, ticks, and labels
+            axes[i].set_xticks([])
+            axes[i].set_yticks([])
             axes[i].set_xlabel('')
             axes[i].set_ylabel('')
-            axes[i].tick_params(labelsize=20)
-            # Set consistent grid style for all subplots
-            axes[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
-            axes[i].set_facecolor('white')  # Ensure white background
-            # Set consistent border style for all subplots
+            axes[i].set_xticklabels([])
+            axes[i].set_yticklabels([])
             for spine in axes[i].spines.values():
+                spine.set_visible(True)
                 spine.set_edgecolor('black')
-                spine.set_linewidth(1.0)
+                spine.set_linewidth(1.5)
+            axes[i].grid(True, alpha=0.3, color='black', linestyle='-', linewidth=0.5)
+
+            # # Set subplot properties
+            # axes[i].set_xlabel('')
+            # axes[i].set_ylabel('')
+            # axes[i].tick_params(labelsize=20)
+            # # Set consistent grid style for all subplots
+            # axes[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+            # axes[i].set_facecolor('white')  # Ensure white background
+            # # Set consistent border style for all subplots
+            # for spine in axes[i].spines.values():
+            #     spine.set_edgecolor('black')
+            #     spine.set_linewidth(1.0)
             
             # Add title at the bottom of the subplot
-            axes[i].text(0.5, -0.20, subplot_titles[i], ha='center', va='top', 
-                        transform=axes[i].transAxes, fontsize=20)
+            axes[i].text(0.5, -0.08, subplot_titles[i], ha='center', va='top', 
+                        transform=axes[i].transAxes, fontsize=36)
             
         except Exception as e:
             print(f"Error processing {folder_path}: {e}")
-            axes[i].text(0.5, 0.5, 'Error', ha='center', va='center', transform=axes[i].transAxes, fontsize=16)
-            # Set consistent grid style for all subplots
-            axes[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
-            axes[i].set_facecolor('white')  # Ensure white background
-            # Set consistent border style for all subplots
-            for spine in axes[i].spines.values():
-                spine.set_edgecolor('black')
-                spine.set_linewidth(1.0)
-            axes[i].text(0.5, -0.15, subplot_titles[i], ha='center', va='top', 
-                        transform=axes[i].transAxes, fontsize=20)
+            exit()
+            # axes[i].text(0.5, 0.5, 'Error', ha='center', va='center', transform=axes[i].transAxes, fontsize=16)
+            # # Set consistent grid style for all subplots
+            # axes[i].grid(True, alpha=0.3, color='gray', linestyle='-', linewidth=0.5)
+            # axes[i].set_facecolor('white')  # Ensure white background
+            # # Set consistent border style for all subplots
+            # for spine in axes[i].spines.values():
+            #     spine.set_edgecolor('black')
+            #     spine.set_linewidth(1.0)
+            # axes[i].text(0.5, -0.10, subplot_titles[i], ha='center', va='top', 
+            #             transform=axes[i].transAxes, fontsize=26)
     
     # Create global legend at the top
     if all_labels:
@@ -214,12 +229,12 @@ def plot_four_subplots_queries(four_folders, output_dir):
         # Add legend at the top, make it larger and more prominent
         fig.legend(legend_handles, sorted_labels, 
                   loc='upper center', bbox_to_anchor=(0.5, 1.00), 
-                  ncol=3, fontsize=22, frameon=False, prop={'size': 22, 'weight': 'bold'}, 
+                  ncol=3, fontsize=40, frameon=False, prop={'size': 40, 'weight': 'bold'}, 
                   markerscale=2.0, handlelength=2.0, handletextpad=0.8)
     
     # Adjust layout
     plt.tight_layout()
-    plt.subplots_adjust(top=0.8, bottom=0.15)  # Make more room for legend and bottom titles
+    plt.subplots_adjust(top=0.75, bottom=0.15)  # Make more room for legend and bottom titles
     
     # Generate output filename
     base_name = f"supports_kde_four_subplots"
@@ -230,6 +245,12 @@ def plot_four_subplots_queries(four_folders, output_dir):
     
     print(f"Four subplots plot saved to: {output_file}")
     return output_file
+
+
+
+
+
+
 
 
 def find_four_folders_for_dataset(dataset_name, base_dirs):
@@ -306,8 +327,8 @@ def find_four_folders_for_dataset(dataset_name, base_dirs):
 if __name__ == "__main__":
     # Base directories to search in
     base_dirs = [
-        "../../save_files/results_rfs_student_bestcombo_noise_new",
-        "../../save_files/results_rfs_student_bestcombo_ProtoMargin_denoise_new"
+        "../save_files/results_rfs_student_bestcombo_noise_new",
+        "../save_files/results_rfs_student_bestcombo_ProtoMargin_denoise_new"
     ]
     
     # Find four folders for each dataset

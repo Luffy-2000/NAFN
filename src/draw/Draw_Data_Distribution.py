@@ -236,7 +236,7 @@ def plot_all_distributions(label_counts_dict):
 
         # Add value labels on the bars
         for i_row, v in enumerate(label_counts.values):
-            ax.text(v, i_row, f' {v:,}', va='center', fontsize=11)
+            ax.text(v*1.05, i_row+0.15, f' {v:,}', va='center', fontsize=12)
     
     # Adjust layout with minimal spacing between subplots
     plt.subplots_adjust(hspace=0.05)
