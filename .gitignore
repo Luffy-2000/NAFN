@@ -215,7 +215,7 @@ PDF/
 data/
 draw/
 src/run_experiments.py
-src/create_cross_dateset_parquet.py
+src/create_cross_dataset_parquet.py
 src/train.py
 src/compute_metrics_simplify.py
 src/analyze_experiments.py
