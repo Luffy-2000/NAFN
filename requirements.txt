@@ -1,0 +1,13 @@
+pytorch_lightning==1.0.2
+matplotlib
+pandas 
+numpy
+torchmetrics==0.11.4
+scikit-learn
+qpth
+torch==1.12.1
+learn2learn==0.1.7
+cvxpy==1.3.1
+pyarrow
+statsmodels
+seaborn
