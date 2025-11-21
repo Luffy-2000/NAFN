@@ -57,72 +57,112 @@ def plot_bar_NN_LR(result_dict, save_dir="./PDF"):
         'iot_nid': 'IoT-NID'
     }
 
-    low_ylim = (0.0, 0.05)
+    # low_ylim = (0.0, 0.05)
     high_ylim = (0.6, 1.05)
 
     def percent_fmt(ax):
         ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
 
-    def add_break_marks(ax_bottom, ax_top, d=0.01):
-        # 在上下轴连接处画“//”断裂标记
-        kwargs = dict(color='k', clip_on=False, linewidth=2)
-        ax_bottom.plot((-d, +d), (1 - d, 1 + d), transform=ax_bottom.transAxes, **kwargs)
-        ax_bottom.plot((1 - d, 1 + d), (1 - d, 1 + d), transform=ax_bottom.transAxes, **kwargs)
-        ax_top.plot((-d, +d), (-d, +d), transform=ax_top.transAxes, **kwargs)
-        ax_top.plot((1 - d, 1 + d), (-d, +d), transform=ax_top.transAxes, **kwargs)
+    # def add_break_marks(ax_bottom, ax_top, d=0.01):
+    #     # 在上下轴连接处画“//”断裂标记
+    #     kwargs = dict(color='k', clip_on=False, linewidth=2)
+    #     ax_bottom.plot((-d, +d), (1 - d, 1 + d), transform=ax_bottom.transAxes, **kwargs)
+    #     ax_bottom.plot((1 - d, 1 + d), (1 - d, 1 + d), transform=ax_bottom.transAxes, **kwargs)
+    #     ax_top.plot((-d, +d), (-d, +d), transform=ax_top.transAxes, **kwargs)
+    #     ax_top.plot((1 - d, 1 + d), (-d, +d), transform=ax_top.transAxes, **kwargs)
 
     for clf in ['NN', 'LR']:
-        fig = plt.figure(figsize=(16, 2.5))
+        # fig, axes = plt.subplots(figsize=(16, 2.5))
+        fig, axes = plt.subplots(1, 3, figsize=(16, 3))
         # fig.suptitle(f"{clf} — Few-shot Performance (Broken Y-axis)", fontsize=14)
-        gs = GridSpec(2, 3, height_ratios=[5, 1], figure=fig, hspace=0.15)  
+        # gs = GridSpec(2, 3, height_ratios=[5, 1], figure=fig, hspace=0.15)  
         # 上面 row 占 3 份（高区间），下面 row 占 1 份（低区间）
 
         for i, ds in enumerate(datasets):
+            ax = axes[i]
             shots = result_dict[clf][ds]['shots']
             means = result_dict[clf][ds]['F1-ALL']['mean']
             stds = result_dict[clf][ds]['F1-ALL']['std']
             x_pos = np.arange(len(shots))
 
-            # 高区间轴（上）
-            ax_high = fig.add_subplot(gs[0, i])
-            bars_high = ax_high.bar(x_pos, means, yerr=stds, capsize=4,
-                                    alpha=0.85, edgecolor="black", color="skyblue")
-            ax_high.set_ylim(*high_ylim)
-            ax_high.set_title(pretty_name_map[ds], fontsize=12)
-            percent_fmt(ax_high)
-            ax_high.grid(axis='y', linestyle='--', alpha=0.6)
-            plt.setp(ax_high.get_xticklabels(), visible=False)
-            ax_high.set_ylabel("F1-All[%]")
-            # 低区间轴（下）
-            ax_low = fig.add_subplot(gs[1, i], sharex=ax_high)
-            bars_low = ax_low.bar(x_pos, means, yerr=stds, capsize=4,
-                                  alpha=0.85, edgecolor="black", color="skyblue")
-            ax_low.set_ylim(*low_ylim)
-            ax_low.set_xlabel("K", fontsize=12)
-            ax_low.set_xticks(x_pos)
-            ax_low.set_xticklabels(shots)
-            percent_fmt(ax_low)
-            ax_low.grid(axis='y', linestyle='--', alpha=0.6)
+            # # 高区间轴（上）
+            # ax_high = fig.add_subplot(gs[0, i])
+            # bars_high = ax_high.bar(x_pos, means, yerr=stds, capsize=4,
+            #                         alpha=0.85, edgecolor="black", color="#1e77b4")
+            # ax_high.set_ylim(*high_ylim)
+            # ax_high.set_title(pretty_name_map[ds], fontsize=12)
+            # percent_fmt(ax_high)
+            # ax_high.grid(axis='y', linestyle='--', alpha=0.6)
+            # plt.setp(ax_high.get_xticklabels(), visible=False)
+            # ax_high.set_ylabel("F1-All[%]")
+            # # 低区间轴（下）
+            # ax_low = fig.add_subplot(gs[1, i], sharex=ax_high)
+            # bars_low = ax_low.bar(x_pos, means, yerr=stds, capsize=4,
+            #                       alpha=0.85, edgecolor="black", color="#1e77b4")
+            # ax_low.set_ylim(*low_ylim)
+            # ax_low.set_xlabel("K", fontsize=12)
+            # ax_low.set_xticks(x_pos)
+            # ax_low.set_xticklabels(shots)
+            # percent_fmt(ax_low)
+            # ax_low.grid(axis='y', linestyle='--', alpha=0.6)
+            bars = ax.bar(
+                x_pos,
+                means,
+                yerr=stds,
+                capsize=4,
+                alpha=0.85,
+                edgecolor="black",
+                color="#1e77b4",
+            )
+            ax.set_ylim(*high_ylim)
+            ax.set_title(pretty_name_map[ds], fontsize=14)
+            percent_fmt(ax)
+            ax.grid(axis='y', linestyle='--', alpha=0.6)
 
-            # 去掉连接处脊线
-            ax_high.spines['bottom'].set_visible(False)
-            ax_low.spines['top'].set_visible(False)
-
-            # 加断裂符号
-            add_break_marks(ax_low, ax_high)
-
+            ax.set_xlabel("K", fontsize=14)
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(shots)
+            ax.set_ylabel("F1-All[%]", fontsize=14)
+            ax.tick_params(axis='y', labelsize=12)
             # 标注数值
             for j, m in enumerate(means):
-                if m <= low_ylim[1]:
-                    ax_low.text(j, m + stds[j] + 0.002, f"{m*100:.2f}%",
-                                ha='center', va='bottom', fontsize=10)
-                elif m >= high_ylim[0]:
-                    ax_high.text(j, m + stds[j] + 0.02, f"{m*100:.2f}%",
-                                 ha='center', va='bottom', fontsize=10)
+                ax.text(
+                    j,
+                    m + stds[j] + 0.01,  # 适当往上移一点
+                    f"{m * 100:.2f}%",
+                    ha='center',
+                    va='bottom',
+                    fontsize=12,
+                )
 
-        plt.tight_layout(rect=[0, 0, 1, 0.94])
-        plt.savefig(f"{save_dir}/{clf}_shots_sensitive_analysis.pdf", bbox_inches='tight', dpi=300)
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        os.makedirs(save_dir, exist_ok=True)
+        plt.savefig(
+            f"{save_dir}/{clf}_shots_sensitive_analysis.pdf",
+            bbox_inches='tight',
+            dpi=300
+        )
         plt.close(fig)
+
+        #     # 去掉连接处脊线
+        #     ax_high.spines['bottom'].set_visible(False)
+        #     ax_low.spines['top'].set_visible(False)
+
+        #     # 加断裂符号
+        #     add_break_marks(ax_low, ax_high)
+
+        #     # 标注数值
+        #     for j, m in enumerate(means):
+        #         if m <= low_ylim[1]:
+        #             ax_low.text(j, m + stds[j] + 0.002, f"{m*100:.2f}%",
+        #                         ha='center', va='bottom', fontsize=10)
+        #         elif m >= high_ylim[0]:
+        #             ax_high.text(j, m + stds[j] + 0.02, f"{m*100:.2f}%",
+        #                          ha='center', va='bottom', fontsize=10)
+
+        # plt.tight_layout(rect=[0, 0, 1, 0.94])
+        # plt.savefig(f"{save_dir}/{clf}_shots_sensitive_analysis.pdf", bbox_inches='tight', dpi=300)
+        # plt.close(fig)
 
 if __name__ == "__main__":
     shot_file_path = "../metrics/bestcombo_student_metrics_Shot.csv"

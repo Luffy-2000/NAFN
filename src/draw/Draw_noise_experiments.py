@@ -102,6 +102,11 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
 
     x_ticks = [0.1, 0.2, 0.3, 0.4, 0.5]
 
+    # ---------------------------
+    # Collect all legend information for global legend
+    # ---------------------------
+    global_handles = {}
+
     for r, ds in enumerate(datasets):
         ds_pretty = _pretty_name(ds)
         noise_ratio = data[clf][ds]['noise_ratio']
@@ -118,7 +123,13 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
                 std_vals  = method_data[key][1]
                 marker = marker_map.get(method_name, default_marker)
 
-                ax.plot(noise_ratio, mean_vals, marker=marker, label=method_name, linewidth=1.2)
+                line, = ax.plot(noise_ratio, mean_vals, marker=marker,
+                                label=method_name, linewidth=1.2)
+
+                # Save global legend handle (only once)
+                if method_name not in global_handles:
+                    global_handles[method_name] = line
+                # ax.plot(noise_ratio, mean_vals, marker=marker, label=method_name, linewidth=1.2)
                 if show_std:
                     ax.fill_between(noise_ratio,
                                     [m-s for m, s in zip(mean_vals, std_vals)],
@@ -126,16 +137,28 @@ def _plot_grid_for_classifier_multi(data, clf, figsize=(14, 12), show_std=False)
                                     alpha=0.15)
 
             if r == 0:
-                ax.set_title(metric)
+                ax.set_title(metric, fontsize=14)
             if c == 0:
-                ax.set_ylabel(ds_pretty)
-            ax.set_xlabel('Noise Ratio', fontsize=11)
+                ax.set_ylabel(ds_pretty, fontsize=14)
+            ax.set_xlabel('Noise Ratio', fontsize=14)
             ax.grid(True, alpha=0.3)
             ax.set_xticks(x_ticks)
             ax.xaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
             ax.yaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
-            ax.legend(fontsize=10, loc='lower left', ncol=2)
-
+            ax.legend().remove()
+    fig.legend(
+        handles=list(global_handles.values()),
+        labels=list(global_handles.keys()),
+        loc='upper center',
+        ncol=len(global_handles),     # horizontal one row
+        fontsize=14,
+        frameon=True,
+        edgecolor='black',
+        facecolor='white',
+        framealpha=1.0,
+        shadow=False,
+        bbox_to_anchor=(0.5, 1.01, 0.6, 0.1)    # put above the image
+    )
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(f'./PDF/NoisyLabel Comparison with {clf}.pdf', bbox_inches='tight', facecolor='white', dpi=300)
 
@@ -154,9 +177,9 @@ if __name__ == "__main__":
     }
 
     noise_results, denoise_results_dict = read_results_multi(noise_file_path, denoise_files)
-    print(noise_results)
-    print(denoise_results_dict)
-    exit()
+    # print(noise_results)
+    # print(denoise_results_dict)
+    # exit()
     # exit()
     result_dict = map_data_to_dict_multi(noise_results, denoise_results_dict)
     # exit()

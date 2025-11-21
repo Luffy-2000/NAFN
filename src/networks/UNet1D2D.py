@@ -72,9 +72,6 @@ class UNet1D2D(nn.Module):
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
-        # print(x3.shape)
-        # pooled = F.adaptive_avg_pool2d(x3, output_size=1)  # shape: (B, C, 1, 1)
-        # features = pooled.view(x3.size(0), -1)  # shape: (B, C)
         features = x3.flatten(1)
         return features, x1, x2, x3
 

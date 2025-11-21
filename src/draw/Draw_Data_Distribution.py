@@ -192,7 +192,7 @@ def plot_all_distributions(label_counts_dict):
         friendly_names = name.get(title, [])
         
         # Create color list based on whether the label is benign or not
-        colors = ['#2ecc71' if is_benign(label) else '#e74c3c' for label in label_counts.index]
+        colors = ['#1e77b4' if is_benign(label) else '#d62527' for label in label_counts.index]
         
         # Create horizontal bar plot with reversed y-axis
         y_pos = np.arange(len(label_counts))
