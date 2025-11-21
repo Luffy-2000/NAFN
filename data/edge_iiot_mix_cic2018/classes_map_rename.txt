@@ -1,1 +1,0 @@
-{'Benign': 1, 'Password': 8, 'DDoS_UDP_Flood': 5, 'DDoS_ICMP_Flood': 3, 'DDoS_HTTP_Flood': 2, 'DDoS_TCP_SYN_Flood': 4, 'Port_Scanning': 9, 'Uploading': 12, 'SQL_injection': 11, 'Vulnerability_scanner': 13, 'XSS': 14, 'Backdoor': 0, 'DDoS LOIC-UDP': 10, 'BruteForce-XSS': 7, 'SQL Injection': 6}

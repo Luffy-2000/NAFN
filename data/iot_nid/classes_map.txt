@@ -1,1 +1,0 @@
-{'ackflooding': 0, 'arpspoofing': 1, 'benign': 2, 'hostdiscovery': 3, 'httpflooding': 4, 'osversiondetection': 5, 'portscanning': 6, 'synflooding': 7, 'telnetbruteforce': 8, 'udpflooding': 9}

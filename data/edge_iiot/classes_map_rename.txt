@@ -1,1 +1,0 @@
-{'Backdoor': 0, 'Benign': 1, 'DDoS_HTTP_Flood': 2, 'DDoS_ICMP_Flood': 3, 'DDoS_TCP_SYN_Flood': 4, 'DDoS_UDP_Flood': 5, 'MITM': 6, 'OS_Fingerprinting': 7, 'Password': 8, 'Port_Scanning': 9, 'Ransomware': 10, 'SQL_injection': 11, 'Uploading': 12, 'Vulnerability_scanner': 13, 'XSS': 14}
