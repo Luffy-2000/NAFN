@@ -21,7 +21,7 @@ dataset_config = {
         'path': join(_BASE_DATA_PATH, 'iot_nid',
                      'iot-nidd_100pkts_6f_clean.parquet'),
         'class_order': [2, 7, 0, 6, 4, 3, 9, 5, 1, 8],  
-        'fs_split': {  
+        'fs_split': {
             'train_classes': [2, 7, 0, 6], # benign, synflooding, ackflooding, portscanning
             'val_classes': [4, 3, 9], # httpflooding, hostdiscovery, udpflooding
             'test_classes': [5, 1, 8] # osversiondetection, arpspoofing, telnetbruteforce
