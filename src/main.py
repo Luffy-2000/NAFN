@@ -191,7 +191,6 @@ def main():
     if not args.pt_only or args.ft_only:
         # if not args.is_unsupervised:
             ft_res = tl_trainer.adaptation(approach=approach, dist_calibrator=dist_calibrator ,dataloader=episode_loader)
-            # print(f"ft_res: {ft_res}")
             eval_res = {**eval_res, **ft_res}
     tl_trainer.save_results(eval_res)
 

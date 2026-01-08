@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from copy import deepcopy
 from networks.autoencoder import Autoencoder
-from networks.UNet import UNet
+# from networks.UNet import UNet
 from networks.UNet1D2D import UNet1D2D
 
 class LLL_Net(nn.Module):
@@ -103,6 +103,6 @@ class LLL_Net(nn.Module):
             return
         
         state_dict = torch.load(path, weights_only=True)
-    
-        self.load_state_dict(state_dict)
         print(f'Model loaded from {path}')
+        self.load_state_dict(state_dict)
+        

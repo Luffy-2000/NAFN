@@ -1,4 +1,4 @@
-# fscil-nids
+# Network Intrusion Detection Adaptability under Spurious Labels: A Noise-Aware Few-Shot Class-Incremental Learning Framework
 
 ## Installation
 
@@ -65,6 +65,11 @@ Generic options in `LightningTLModule` include:
 - `--kd-t`: Temperature for knowledge distillation loss (default: 1)
 - `--teacher-path`: Path to the teacher model (default: None)
 - `--base-learner`: Type of base learner ('lr' or 'nn') (default: 'nn')
+- `--pre-mode`: Pre-training mode, choices: `none`, `recon`, `contrastive`, `hybrid` (default: None)
+- `--memory-selector`: Memory selection strategy, choices: `herding`, `uncertainty`, `random` (default: None)
+- `--noise-label`: Enable noisy label training if present
+- `--noise-ratio`: Noise ratio for noisy labels (0.0-1.0, default: 0.0)
+- `--denoising`: Denoising method, choices: `proto_margin`, `LOF` (default: None)
 
 ### Network Options 
 
@@ -72,7 +77,7 @@ The [network](src/networks/network.py) class defines the architecture model to b
 
 Options include:
 
-- `--network`: Embedding function to use (default: `Lopez17CNN`)
+- `--network`: Embedding function to use (default: `Lopez17CNN`). The network used in experiments is `UNet1D2D`
 - `--out-features-size`: Feature vector size (default: -1)
 - `--weights-path`: Path to a `*.pt` file with weights to initialize the embedding function (default: None)
 - `--scale`: Scaling factor for the neural network backbone (default: 1)
@@ -131,20 +136,37 @@ In [src/networks](./src/networks/), you can find implementations of embedding fu
 
 ### Step 1: Train the Teacher
 
-```bash
-python3 main.py --is-fscil --dataset iot_nid --fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots 10 --queries 40 --gpus 1 --num-tasks 100 --max_epochs 200 --seed 0 --approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 --mode max --double-monitor --lr 0.0001 --lr-strat none --classes-per-set 7 3 --default_root_dir ../results_rfs_teacher --network Lopez17CNN --base-learner nn
-
-```
-
-### Step 2: Train the Student
-
-After completing the training, select the best model weights from the results folder (e.g., `../results_rfs_teacher/lightning_logs/version_0/distill_models/teacher_ep100.p`). Use these weights to initialize the teacher and train the student:
+To train the teacher model, you need to specify the pre-training mode and memory selector. Example for iot_nid dataset with nn classifier:
 
 ```bash
-python3 main.py --is-fscil --dataset iot_nid --fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots 10 --queries 40 --gpus 1 --num-tasks 100 --max_epochs 200 --seed 0 --approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 --mode max --double-monitor --lr 0.0001 --lr-strat none --classes-per-set 7 3 --default_root_dir ../results_rfs_student --network Lopez17CNN --base-learner nn --kd-t 1 --teacher-path ../results_rfs_teacher/lightning_logs/version_0/distill_models/teacher_ep100.pt --is-distill
+python3 main.py --is-fscil --dataset iot_nid --fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots 10 --queries 40 --gpus 1 --num-tasks 100 --max_epochs 100 --seed 0 --approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 --mode max --double-monitor --lr 0.0001 --lr-strat none --classes-per-set 7 3 --default_root_dir ../save_files/results_rfs_teacher_allpre/results_rfs_teacher_iot_nid_10shot_contrastive_nn_uncertainty --network UNet1D2D --base-learner nn --pre-mode contrastive --memory-selector uncertainty
 ```
 
-Note that you can train a new student using the previous student as a teacher.
+### Step 2: Train the Student with Noisy Labels and Denoising
+
+When training the student model, knowledge distillation, noisy labels, and denoising methods are used. The teacher model path is automatically found from the training results directory.
+
+Example for iot_nid dataset with nn classifier, noise ratio 0.1, and proto_margin denoising:
+
+```bash
+python3 main.py --is-fscil --dataset iot_nid --fields PL IAT DIR WIN FLG TTL --num-pkts 20 --shots 9 --queries 40 --gpus 1 --num-tasks 100 --max_epochs 100 --seed 0 --approach rfs --patience 20 --monitor valid_accuracy --min_delta 0.001 --mode max --double-monitor --lr 0.0001 --lr-strat none --classes-per-set 7 3 --default_root_dir ../save_files/results_rfs_student/results_rfs_student_iot_nid_9shot_contrastive_nn_uncertainty_noise_0.1 --network UNet1D2D --base-learner nn --kd-t 1 --teacher-path ../save_files/results_rfs_teacher_allpre/results_rfs_teacher_iot_nid_10shot_contrastive_nn_uncertainty/lightning_logs/version_0/distill_models/teacher_ep100.pt --is-distill --memory-selector uncertainty --noise-label --noise-ratio 0.1 --denoising proto_margin
+```
+
+Key parameters for noisy label training and denoising:
+- `--noise-label`: Enable noisy label training
+- `--noise-ratio`: Noise ratio for noisy labels (0.0-1.0), e.g., 0.1 means 10% of labels are noisy
+- `--denoising`: Denoising method, choices: `proto_margin`, `LOF`
+
+### Using the Automation Script
+
+You can use the `run_experiments.py` script to run experiments in batch with different noise ratios:
+
+```bash
+cd src
+python3 run_experiments.py --datasets iot_nid --shots 9 8 7 6 5 --classifier nn --noise-ratios 0.1 0.2 0.3 0.4 0.5
+```
+
+The script automatically selects the optimal pre-training mode and memory selector based on the dataset configuration, and handles teacher model path lookup.
 
 ## Acknowledgement
 
