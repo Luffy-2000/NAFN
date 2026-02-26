@@ -45,10 +45,10 @@ class RepresentationDistributionCalibrator:
         C_q = [cls_id for cls_id, _ in top_base]
 
         # Calculate fusion weights
-        weights = np.array([
-            self.class_sizes[c] * distances[c] for c in C_q
-        ])
-        weights = weights / weights.sum()
+        eps = 1e-12
+        weights = np.array([self.class_sizes[c] / (distances[c] + eps) for c in C_q], dtype=float)
+        weights /= weights.sum()
+
 
         # Fuse mean & covariance
         mu_calibrated = self.gamma * sum(
