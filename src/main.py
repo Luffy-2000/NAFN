@@ -75,8 +75,15 @@ def main():
                         help='If set, add label noise to support set in each episode')
     parser.add_argument('--noise-ratio', type=float, default=0.0,
                         help='Ratio of support samples to corrupt with label noise (default=0.2)')
+    parser.add_argument('--ro', type=float, default=0.2,
+                        help='Ratio for synthetic samples per class: n = max(1, int(ro * shots))')
     parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF', 'proto_margin', 'DCML'],
                         help='Denoising method for support set: none (no denoising), LOF (Local Outlier Factor), IF (Isolation Forest), proto_margin (Prototype Margin), DCML (DCML)')
+    # Feature synthesis (distribution calibration) sensitivity
+    parser.add_argument('--calib-gamma', type=float, default=0.7,
+                        help='Proportion for new class in calibrated distribution (1-gamma on new class; used with base fusion). Default 0.7')
+    parser.add_argument('--calib-epsilon', type=float, default=0.7,
+                        help='Proportion for base-class fusion in calibrated distribution. Default 0.7')
     args = parser.parse_args()
     dict_args = vars(args)
     
@@ -161,7 +168,9 @@ def main():
 
     memory_task_dataset.initialize_memory(net, pretrain_datamodule.train_set)
 
-    dist_calibrator = RepresentationDistributionCalibrator(top_q=3, gamma=0.7, alpha=1e-2)
+    dist_calibrator = RepresentationDistributionCalibrator(
+        top_q=3, gamma=args.calib_gamma, alpha=1e-2, epsilon=args.calib_epsilon
+    )
     # === Recording distribution of base classes===
     # print('Extracting features and recording base class distributions...')
     memory_features = []

@@ -46,8 +46,9 @@ class RepresentationDistributionCalibrator:
         top_base = sorted(distances.items(), key=lambda x: x[1])[:self.top_q]
         C_q = [cls_id for cls_id, _ in top_base]
 
-        # Calculate fusion weights
-        weights = np.array([self.class_sizes[c] / (distances[c] + self.epsilon) for c in C_q], dtype=float)
+        # Calculate fusion weights (closer => larger weight; use small eps for numerical stability)
+        eps = 1e-8
+        weights = np.array([self.class_sizes[c] / (distances[c] + eps) for c in C_q], dtype=float)
         weights /= weights.sum()
 
         # Fuse mean & covariance

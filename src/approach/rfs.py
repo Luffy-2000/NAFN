@@ -83,6 +83,7 @@ class LightningRFS(LightningTLModule):
         self.ce_weight = kwargs.get('ce_weight', 0.8)
         self.contrastive_weight = kwargs.get('contrastive_weight', 0.2)
         self.noise_ratio = kwargs.get('noise_ratio', 0.0)
+        self.ro = kwargs.get('ro', 0.2)
 
         assert (
             self.alpha + self.gamma == 1.0
@@ -110,7 +111,8 @@ class LightningRFS(LightningTLModule):
             "base_learner": self.base_learner,
             "pre_mode": self.mode,
             "denoising": self.denoising,
-            "noise_ratio": self.noise_ratio
+            "noise_ratio": self.noise_ratio,
+            "ro": self.ro
         })
 
         # ========== MOCO related ==========
@@ -382,7 +384,7 @@ class LightningRFS(LightningTLModule):
                 # Calibrate new class distribution
                 mu, sigma = self.dist_calibrator.calibrate(int(cls), features)
                 # Sample and supplement features
-                n_outliers = max(1, int(self.noise_ratio * self.shots))
+                n_outliers = max(1, int(self.ro * self.shots))
                 # n_samples = max(1, int(0.3 * features.shape[0]))  # Supplement 30% samples
                 samples, labels = self.dist_calibrator.sample_from_class(int(cls), n_outliers)
                 new_support_features.append(samples)
