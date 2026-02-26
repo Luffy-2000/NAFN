@@ -3,15 +3,17 @@ from scipy.stats import multivariate_normal
 from typing import Tuple
 
 class RepresentationDistributionCalibrator:
-    def __init__(self, top_q=3, gamma=0.7, alpha=1e-2):
+    def __init__(self, top_q=3, gamma=0.7, alpha=1e-2, epsilon=0.7):
         """
         Args:
             top_q: Number of base classes used for new class distribution calibration
-            gamma: Proportion for fusing base distributions
+            gamma: Proportion for fusing new class distribution
             alpha: Covariance perturbation term to avoid singularity
+            epsilon: Proportion for fusing base class distribution
         """
         self.top_q = top_q
         self.gamma = gamma
+        self.epsilon = epsilon
         self.alpha = alpha
         self.class_distributions = {}  # {class_id: (mean, cov)}
         self.class_sizes = {}  # {class_id: num_samples}
@@ -45,17 +47,15 @@ class RepresentationDistributionCalibrator:
         C_q = [cls_id for cls_id, _ in top_base]
 
         # Calculate fusion weights
-        eps = 1e-12
-        weights = np.array([self.class_sizes[c] / (distances[c] + eps) for c in C_q], dtype=float)
+        weights = np.array([self.class_sizes[c] / (distances[c] + self.epsilon) for c in C_q], dtype=float)
         weights /= weights.sum()
 
-
         # Fuse mean & covariance
-        mu_calibrated = self.gamma * sum(
+        mu_calibrated = self.epsilon * sum(
             w * self.class_distributions[c][0] for w, c in zip(weights, C_q)
         ) + (1 - self.gamma) * mu_k
 
-        sigma_calibrated = self.gamma * sum(
+        sigma_calibrated = self.epsilon * sum(
             w * self.class_distributions[c][1] for w, c in zip(weights, C_q)
         ) + (1 - self.gamma) * sigma_k + self.alpha * np.ones_like(sigma_k)
 
