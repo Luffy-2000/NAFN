@@ -13,7 +13,42 @@ from modules.teachers import Teacher
 from modules.classifiers import NN, LR
 from util.traffic_transformations import permutation, pkt_translating, wrap
 from util.denoising import Denoiser, DenoiseConfig
+from sklearn.neighbors import NearestNeighbors
 EPSILON = 1e-8
+
+
+def _mixup_supplement(features: np.ndarray, n_synthetic: int, lam_range=(0.2, 0.8), rng=None) -> np.ndarray:
+    """Generate synthetic samples by Mixup: convex combination of two same-class samples."""
+    N, D = features.shape
+    if N < 2 or n_synthetic <= 0:
+        return np.zeros((0, D))
+    rng = rng or np.random.default_rng()
+    lam_lo, lam_hi = lam_range
+    syn = []
+    for _ in range(n_synthetic):
+        i, j = rng.choice(N, 2, replace=False)
+        lam = rng.uniform(lam_lo, lam_hi)
+        syn.append(lam * features[i] + (1.0 - lam) * features[j])
+    return np.array(syn, dtype=features.dtype)
+
+
+def _smote_supplement(features: np.ndarray, n_synthetic: int, k: int = 5, rng=None) -> np.ndarray:
+    """Generate synthetic samples by SMOTE: interpolate between a sample and a random k-NN neighbor."""
+    N, D = features.shape
+    if N <= 1 or n_synthetic <= 0:
+        return np.zeros((0, D))
+    k = min(k, N - 1)
+    rng = rng or np.random.default_rng()
+    nn = NearestNeighbors(n_neighbors=k + 1).fit(features)
+    _, indices = nn.kneighbors(features)  # (N, k+1), first column is self
+    syn = []
+    for _ in range(n_synthetic):
+        i = rng.integers(0, N)
+        j_local = rng.integers(1, k + 1)
+        j = indices[i, j_local]
+        t = rng.uniform(0.0, 1.0)
+        syn.append(features[i] + t * (features[j] - features[i]))
+    return np.array(syn, dtype=features.dtype)
 
 
 class LightningRFS(LightningTLModule):
@@ -90,6 +125,7 @@ class LightningRFS(LightningTLModule):
         ), 'alpha + gamma should be equal to 1'
 
         self.denoising = kwargs.get('denoising', 'none')
+        self.supplement_method = kwargs.get('supplement_method', 'sample')  # none | sample | mixup | smote
         self.classes_per_set = kwargs.get('classes_per_set', [10, 5])
         self.num_old_classes = self.classes_per_set[0]
         self.num_new_classes = self.classes_per_set[1]
@@ -111,6 +147,7 @@ class LightningRFS(LightningTLModule):
             "base_learner": self.base_learner,
             "pre_mode": self.mode,
             "denoising": self.denoising,
+            "supplement_method": self.supplement_method,
             "noise_ratio": self.noise_ratio,
             "ro": self.ro
         })
@@ -351,7 +388,7 @@ class LightningRFS(LightningTLModule):
         # 初始化（例如：用 proto_margin；或 "LOF"/"IF"/"none"）
         cfg = DenoiseConfig(
             strategy= self.denoising,     # "proto_margin" | "LOF" | "IF" | "none"
-            noise_ratio=self.noise_ratio,
+            noise_ratio=self.ro,
             lof_k=10,
             if_random_state=42,
             proto_iters=2,
@@ -368,34 +405,38 @@ class LightningRFS(LightningTLModule):
         )
         # === End of denoising ===
 
-        if self.denoising is not 'none':
-            # === Record new class distribution and calibrate and supplement ===
-            # Need self.dist_calibrator and self.num_old_classes, self.num_new_classes
+        # 消融：去噪后可选 不补充 / 分布采样 / Mixup / SMOTE
+        if self.denoising != 'none' and self.supplement_method != 'none':
             new_class_ids = set(range(self.num_old_classes, self.num_old_classes + self.num_new_classes))
             new_support_features = []
             new_support_labels = []
+            n_supplement = max(1, int(self.ro * self.shots))
             for cls in new_class_ids:
                 idx = (support_labels.cpu().numpy() == cls)
                 if np.sum(idx) == 0:
                     continue
                 features = s_embeddings[idx].detach().cpu().numpy()
-                # Record new class distribution
-                self.dist_calibrator.update_class_distribution(int(cls), features)
-                # Calibrate new class distribution
-                mu, sigma = self.dist_calibrator.calibrate(int(cls), features)
-                # Sample and supplement features
-                n_outliers = max(1, int(self.ro * self.shots))
-                # n_samples = max(1, int(0.3 * features.shape[0]))  # Supplement 30% samples
-                samples, labels = self.dist_calibrator.sample_from_class(int(cls), n_outliers)
-                new_support_features.append(samples)
-                new_support_labels.append(labels)
+                if self.supplement_method == 'sample':
+                    # 原逻辑：记录分布 → 校准 → 从校准分布采样
+                    self.dist_calibrator.update_class_distribution(int(cls), features)
+                    mu, sigma = self.dist_calibrator.calibrate(int(cls), features)
+                    samples, labels = self.dist_calibrator.sample_from_class(int(cls), n_supplement)
+                elif self.supplement_method == 'mixup':
+                    samples = _mixup_supplement(features, n_supplement)
+                    labels = np.full((samples.shape[0],), cls, dtype=np.int64)
+                elif self.supplement_method == 'smote':
+                    samples = _smote_supplement(features, n_supplement, k=5)
+                    labels = np.full((samples.shape[0],), cls, dtype=np.int64)
+                else:
+                    continue
+                if samples.shape[0] > 0:
+                    new_support_features.append(samples)
+                    new_support_labels.append(labels)
             if new_support_features:
                 new_support_features = np.concatenate(new_support_features, axis=0)
                 new_support_labels = np.concatenate(new_support_labels, axis=0)
-                # Concatenate to support set
                 s_embeddings = torch.cat([s_embeddings, torch.tensor(new_support_features, device=s_embeddings.device, dtype=s_embeddings.dtype)], dim=0)
                 support_labels = torch.cat([support_labels, torch.tensor(new_support_labels, device=support_labels.device, dtype=support_labels.dtype)], dim=0)
-            # === End of new class distribution calibration and supplement ===
 
         if self.base_learner == 'lr':
             # Logistic Regressor used to classify the query feats 

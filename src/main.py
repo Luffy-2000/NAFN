@@ -79,6 +79,8 @@ def main():
                         help='Ratio for synthetic samples per class: n = max(1, int(ro * shots))')
     parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF', 'proto_margin', 'DCML'],
                         help='Denoising method for support set: none (no denoising), LOF (Local Outlier Factor), IF (Isolation Forest), proto_margin (Prototype Margin), DCML (DCML)')
+    parser.add_argument('--supplement-method', type=str, default='sample', choices=['none', 'sample', 'mixup', 'smote'],
+                        help='After denoising: none=only denoise; sample=calibrated distribution sampling (default); mixup=Mixup; smote=SMOTE')
     # Feature synthesis (distribution calibration) sensitivity
     parser.add_argument('--calib-gamma', type=float, default=0.7,
                         help='Proportion for new class in calibrated distribution (1-gamma on new class; used with base fusion). Default 0.7')

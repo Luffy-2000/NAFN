@@ -71,6 +71,15 @@ Generic options in `LightningTLModule` include:
 - `--noise-ratio`: Noise ratio for noisy labels (0.0-1.0, default: 0.0)
 - `--denoising`: Denoising method, choices: `proto_margin`, `LOF` (default: None)
 
+### Feature synthesis (calibration) options
+
+Hyperparameters for distribution calibration and feature synthesis (see [`Distribution.py`](src/modules/Distribution.py)):
+
+- `--calib-gamma`: Weight on the **new class** in the calibrated mean/covariance; the base-class fusion gets the rest. Default: 0.7 (i.e. 30% new class, 70% base fusion when used with `--calib-epsilon`).
+- `--calib-epsilon`: Weight on the **base-class fusion** in the calibrated distribution. Default: 0.7.
+
+Use these for sensitivity experiments, e.g. `--calib-gamma 0.5 --calib-epsilon 0.5`.
+
 ### Network Options 
 
 The [network](src/networks/network.py) class defines the architecture model to be used. This class includes methods to manage the model.
