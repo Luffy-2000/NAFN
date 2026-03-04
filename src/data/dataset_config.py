@@ -59,6 +59,67 @@ dataset_config = {
         },
         'label_column': 'LABEL_FULL',
     },
+
+    'cic2018_1ts': {  
+        'path': join(_BASE_DATA_PATH, 'cic2018_1ts',
+                     'cic2018_dataset_df_no_obf_20pkts_6feats_median_sampled_no_infiltration_clean_1ts.parquet'),
+        'class_order': [8, 9, 5, 1, 2, 0, 6, 10, 3, 7, 4, 11],  
+        'fs_split': {  
+            'train_classes': [8, 9, 5, 1, 2, 0], 
+            'val_classes': [6, 10, 3],
+            'test_classes': [7, 4, 11]
+        },
+        'label_column': 'LABEL_FULL',
+    },
+
+    'cic2018_5ts': {  
+        'path': join(_BASE_DATA_PATH, 'cic2018_5ts',
+                     'cic2018_dataset_df_no_obf_20pkts_6feats_median_sampled_no_infiltration_clean_5ts.parquet'),
+        'class_order': [8, 9, 5, 1, 2, 0, 6, 10, 3, 7, 4, 11],  
+        'fs_split': {  
+            'train_classes': [8, 9, 5, 1, 2, 0], 
+            'val_classes': [6, 10, 3],
+            'test_classes': [7, 4, 11]
+        },
+        'label_column': 'LABEL_FULL',
+    },
+
+    'cic2018_10ts': {  
+        'path': join(_BASE_DATA_PATH, 'cic2018_10ts',
+                     'cic2018_dataset_df_no_obf_20pkts_6feats_median_sampled_no_infiltration_clean_10ts.parquet'),
+        'class_order': [8, 9, 5, 1, 2, 0, 6, 10, 3, 7, 4, 11],  
+        'fs_split': {  
+            'train_classes': [8, 9, 5, 1, 2, 0], 
+            'val_classes': [6, 10, 3],
+            'test_classes': [7, 4, 11]
+        },
+        'label_column': 'LABEL_FULL',
+    },
+
+    'cic2018_50ts': {  
+        'path': join(_BASE_DATA_PATH, 'cic2018_50ts',
+                     'cic2018_dataset_df_no_obf_20pkts_6feats_median_sampled_no_infiltration_clean_50ts.parquet'),
+        'class_order': [8, 9, 5, 1, 2, 0, 6, 10, 3, 7, 4, 11],  
+        'fs_split': {  
+            'train_classes': [8, 9, 5, 1, 2, 0], 
+            'val_classes': [6, 10, 3],
+            'test_classes': [7, 4, 11]
+        },
+        'label_column': 'LABEL_FULL',
+    },
+
+    'cic2018_100ts': {  
+        'path': join(_BASE_DATA_PATH, 'cic2018_100ts',
+                     'cic2018_dataset_df_no_obf_20pkts_6feats_median_sampled_no_infiltration_clean_100ts.parquet'),
+        'class_order': [8, 9, 5, 1, 2, 0, 6, 10, 3, 7, 4, 11],  
+        'fs_split': {  
+            'train_classes': [8, 9, 5, 1, 2, 0], 
+            'val_classes': [6, 10, 3],
+            'test_classes': [7, 4, 11]
+        },
+        'label_column': 'LABEL_FULL',
+    },
+
     'cic2018_mix_iot_nid': {  
         'path': join(_BASE_DATA_PATH, 'cic2018_mix_iot_nid',
                      'cic2018_with_iot_nid_test_replaced.parquet'),
