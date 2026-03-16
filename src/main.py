@@ -77,8 +77,8 @@ def main():
                         help='Ratio of support samples to corrupt with label noise (default=0.2)')
     parser.add_argument('--ro', type=float, default=0.2,
                         help='Ratio for synthetic samples per class: n = max(1, int(ro * shots))')
-    parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF', 'proto_margin', 'DCML'],
-                        help='Denoising method for support set: none (no denoising), LOF (Local Outlier Factor), IF (Isolation Forest), proto_margin (Prototype Margin), DCML (DCML)')
+    parser.add_argument('--denoising', type=str, default='none', choices=['none', 'LOF', 'IF', 'proto_margin', 'DCML', 'CSIDN'],
+                        help='Denoising: none, LOF, IF, proto_margin, DCML (filter); CSIDN (no removal, support soft labels)')
     parser.add_argument('--supplement-method', type=str, default='sample', choices=['none', 'sample', 'mixup', 'smote'],
                         help='After denoising: none=only denoise; sample=calibrated distribution sampling (default); mixup=Mixup; smote=SMOTE')
     # Feature synthesis (distribution calibration) sensitivity

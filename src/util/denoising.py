@@ -63,10 +63,11 @@ class Denoiser:
         support_labels: torch.Tensor,        # (N,)
         num_old_classes: int,
         num_new_classes: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
         """
-        Returns: (s_embeddings_filtered, support_labels_filtered, mask_bool)
+        Returns: (s_embeddings_filtered, support_labels_filtered, mask_bool, sample_weights)
         Only denoise [new classes]; old class samples are all preserved.
+        sample_weights is None for all filter strategies.
         """
         device = s_embeddings.device
         labels_np = support_labels.detach().cpu().numpy()
@@ -76,6 +77,7 @@ class Denoiser:
         new_class_ids = set(range(num_old_classes, num_old_classes + num_new_classes))
 
         mask = torch.zeros_like(support_labels, dtype=torch.bool, device=device)
+        sample_weights = None
 
         # ===== 若使用 DCML：先基于全部“可见类”（旧+新）训练一个临时分类头 =====
         head_fn = None
@@ -145,7 +147,7 @@ class Denoiser:
             idx_indices = torch.from_numpy(np.where(idx)[0]).to(device)
             mask[idx_indices[keep_mask_local]] = True
 
-        return s_embeddings[mask], support_labels[mask], mask
+        return s_embeddings[mask], support_labels[mask], mask, sample_weights
 
     # ----------------- sklearn branch: LOF / IF -----------------
     def _denoise_outlier_sklearn(self, X: torch.Tensor, strategy: str) -> torch.Tensor:

@@ -10,9 +10,10 @@ import copy
 from approach.tl_module import LightningTLModule
 from modules.losses import DistillKLLoss
 from modules.teachers import Teacher
-from modules.classifiers import NN, LR
+from modules.classifiers import NN, LR, NN_soft, LR_soft
 from util.traffic_transformations import permutation, pkt_translating, wrap
 from util.denoising import Denoiser, DenoiseConfig
+from util.noise_utils import get_mus_hat, S_to_T, backward_corrected_label
 from sklearn.neighbors import NearestNeighbors
 EPSILON = 1e-8
 
@@ -366,6 +367,57 @@ class LightningRFS(LightningTLModule):
     
 
     @torch.no_grad()
+    def _build_transition_soft_labels(self, s_embeddings, support_labels, way, diag_hat: float = 0.5):
+        """
+        Build soft labels via paper's transition matrix (Berthon et al., 2021).
+        For each new-class sample: r=confidence from leave-one-out -> mus_hat -> P -> backward P(true|obs).
+        diag_hat: 1-ro, noise-scale hyperparameter; higher noise -> smaller diag -> less trust in non-observed labels.
+        """
+        support_soft_labels = F.one_hot(support_labels, num_classes=way).float().to(s_embeddings.device)
+        class_counts = torch.bincount(support_labels, minlength=way)
+        new_class_range = range(self.num_old_classes, self.num_old_classes + self.num_new_classes)
+
+        for idx, label in enumerate(support_labels.tolist()):
+            if label not in new_class_range or class_counts[label].item() <= 1:
+                continue
+
+            keep_mask = torch.ones(s_embeddings.size(0), dtype=torch.bool, device=s_embeddings.device)
+            keep_mask[idx] = False
+
+            if self.base_learner == 'lr':
+                soft_values, _ = LR(
+                    x_support=s_embeddings[keep_mask],
+                    y_support=support_labels[keep_mask],
+                    x_query=s_embeddings[idx].unsqueeze(0),
+                )
+            elif self.base_learner == 'nn':
+                soft_values, _ = NN(
+                    x_support=s_embeddings[keep_mask],
+                    y_support=support_labels[keep_mask],
+                    x_query=s_embeddings[idx].unsqueeze(0),
+                )
+            else:
+                raise ValueError('Bad base learner')
+
+            probs = soft_values.squeeze(0).to(s_embeddings.device)
+            r = probs[label].item()
+            r = max(1e-6, min(1.0 - 1e-6, r))
+
+            y_vec = F.one_hot(torch.tensor([label], device=s_embeddings.device), num_classes=way).float().squeeze(0)
+            diag_val = max(1e-6, min(1.0 - 1e-6, float(diag_hat)))
+            mus_hat = get_mus_hat(r, y_vec, diag_val)
+            P = S_to_T(mus_hat, way)
+            soft_label = backward_corrected_label(
+                P, label,
+                restrict_to_new=True,
+                num_old_classes=self.num_old_classes,
+                num_new_classes=self.num_new_classes,
+            )
+            support_soft_labels[idx] = soft_label
+
+        return support_soft_labels
+
+    @torch.no_grad()
     def ft_step(self, dist_calibrator, batch):
         # Grad disabled since the backbone is frozen and a fully-connected head is not used
         self.net.eval()
@@ -385,28 +437,35 @@ class LightningRFS(LightningTLModule):
         # print('support_labels', support_labels)
         # print('query_labels', query_labels)
         
-        # 初始化（例如：用 proto_margin；或 "LOF"/"IF"/"none"）
-        cfg = DenoiseConfig(
-            strategy= self.denoising,     # "proto_margin" | "LOF" | "IF" | "none"
-            noise_ratio=self.ro,
-            lof_k=10,
-            if_random_state=42,
-            proto_iters=2,
-            metric="cosine",             # "cosine" 推荐；或 "euclidean"
-        )
-        denoiser = Denoiser(cfg)
+        support_soft_labels = None
+        sample_weights = None
+        if self.denoising == 'CSIDN':
+            # CSIDN: Confidence Scores for Instance-dependent Noise; keeps all support, softens new-class targets.
+            support_soft_labels = self._build_transition_soft_labels(
+                s_embeddings=s_embeddings,
+                support_labels=support_labels,
+                way=way,
+                diag_hat=1.0 - self.ro,
+            )
+        else:
+            cfg = DenoiseConfig(
+                strategy=self.denoising,
+                noise_ratio=self.ro,
+                lof_k=10,
+                if_random_state=42,
+                proto_iters=2,
+                metric="cosine",
+            )
+            denoiser = Denoiser(cfg)
+            s_embeddings, support_labels, mask, sample_weights = denoiser(
+                s_embeddings=s_embeddings,
+                support_labels=support_labels,
+                num_old_classes=self.num_old_classes,
+                num_new_classes=self.num_new_classes,
+            )
 
-        # === Denoising for new classes only, using classes_per_set to distinguish ===
-        s_embeddings, support_labels, mask = denoiser(
-            s_embeddings=s_embeddings,                  # (N, D)
-            support_labels=support_labels,              # (N,)
-            num_old_classes=self.num_old_classes,
-            num_new_classes=self.num_new_classes,
-        )
-        # === End of denoising ===
-
-        # 消融：去噪后可选 不补充 / 分布采样 / Mixup / SMOTE
-        if self.denoising != 'none' and self.supplement_method != 'none':
+        # 消融：去噪后可选 不补充 / 分布采样 / Mixup / SMOTE（CSIDN 不参与补充）
+        if self.denoising not in ('none', 'CSIDN') and self.supplement_method != 'none':
             new_class_ids = set(range(self.num_old_classes, self.num_old_classes + self.num_new_classes))
             new_support_features = []
             new_support_labels = []
@@ -438,24 +497,38 @@ class LightningRFS(LightningTLModule):
                 s_embeddings = torch.cat([s_embeddings, torch.tensor(new_support_features, device=s_embeddings.device, dtype=s_embeddings.dtype)], dim=0)
                 support_labels = torch.cat([support_labels, torch.tensor(new_support_labels, device=support_labels.device, dtype=support_labels.dtype)], dim=0)
 
-        if self.base_learner == 'lr':
-            # Logistic Regressor used to classify the query feats 
-            soft_values, y_pred = LR(
-                x_support=s_embeddings, 
-                y_support=support_labels, 
+        if self.denoising == 'CSIDN' and self.base_learner == 'lr':
+            soft_values, y_pred = LR_soft(
+                x_support=s_embeddings,
+                support_soft_labels=support_soft_labels,
                 x_query=q_embeddings,
             )
             soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
             eval_loss = self.nl_loss(soft_values.log(), query_labels)
-            # y_pred = torch.tensor(y_pred)
-           
+        elif self.denoising == 'CSIDN' and self.base_learner == 'nn':
+            soft_values, y_pred = NN_soft(
+                x_support=s_embeddings,
+                support_soft_labels=support_soft_labels,
+                x_query=q_embeddings,
+            )
+            soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
+            eval_loss = self.nl_loss(soft_values.log(), query_labels)
+        elif self.base_learner == 'lr':
+            soft_values, y_pred = LR(
+                x_support=s_embeddings,
+                y_support=support_labels,
+                x_query=q_embeddings,
+                sample_weight=sample_weights,
+            )
+            soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
+            eval_loss = self.nl_loss(soft_values.log(), query_labels)
         elif self.base_learner == 'nn':
-            # Nearest-neighbour used to classify the query feats
             soft_values, y_pred = NN(
-                x_support=s_embeddings, 
-                y_support=support_labels, 
-                x_query=q_embeddings, 
-            )   
+                x_support=s_embeddings,
+                y_support=support_labels,
+                x_query=q_embeddings,
+                sample_weight=sample_weights,
+            )
             soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
             eval_loss = self.nl_loss(soft_values.log(), query_labels)
         
