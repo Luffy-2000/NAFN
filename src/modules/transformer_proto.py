@@ -1,6 +1,6 @@
 """
 Transformer-based prototype aggregation (TraNFS-style).
-作为降噪方法：用 attention 对 support 做加权聚合，输出 prototypes 和 sample_weights.
+As denoising: use attention to weight support samples, output prototypes and sample_weights.
 """
 import torch
 import torch.nn as nn
@@ -8,9 +8,9 @@ import torch.nn as nn
 
 class TransformerProto(nn.Module):
     """
-    TraNFS 风格：cls tokens + support embeddings，Transformer 聚合。
-    输入: s_embeddings (n_support, dim), support_labels, way, shot
-    输出: prototypes (way, dim), sample_weights (n_support,)
+    TraNFS-style: cls tokens + support embeddings, Transformer aggregation.
+    Input: s_embeddings (n_support, dim), support_labels, way, shot
+    Output: prototypes (way, dim), sample_weights (n_support,)
     """
 
     def __init__(self, d_model=320, nhead=8, num_layers=2, max_way=20, max_shot=50, dropout=0.1):
@@ -20,7 +20,7 @@ class TransformerProto(nn.Module):
         self.max_shot = max_shot
 
         self.cls_embeddings = nn.Embedding(max_way, d_model)
-        self.pos_embeddings = nn.Embedding(max_way, d_model)  # 按 class id，way 个位置
+        self.pos_embeddings = nn.Embedding(max_way, d_model)  # by class id, way positions
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
@@ -37,10 +37,10 @@ class TransformerProto(nn.Module):
         Args:
             s_embeddings: (n_support, d_model), n_support = way * shot
             support_labels: (n_support,)
-            way, shot: 当前 episode 的 way 和 shot
+            way, shot: way and shot for current episode
         Returns:
             prototypes: (way, d_model)
-            sample_weights: (n_support,) - 用于 LR 的样本权重
+            sample_weights: (n_support,) - sample weights for LR
         """
         device = s_embeddings.device
         n_support = s_embeddings.size(0)

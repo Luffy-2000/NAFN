@@ -1,6 +1,6 @@
 """
 NCR: Neighbourhood Consistency Regularisation.
-基于 K-NN 近邻得到环境标签，与脏标签融合用于去噪.
+Builds environment labels via K-NN neighbours and fuses with dirty labels for denoising.
 Ref: https://arxiv.org/pdf/2202.02200.pdf
 """
 from typing import Optional, Tuple
@@ -22,12 +22,12 @@ def get_knn(
     zero_negative_similarities: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    K 近邻检索（L2 归一化后余弦相似度 = 内积）.
+    K-nearest neighbour retrieval (cosine similarity = inner product after L2 normalization).
 
     Args:
         queries: [q, d]
         dataset: [n, d]
-        k: 近邻数
+        k: number of neighbours
     Returns:
         indices: [q, k]
         similarities: [q, k]
@@ -56,14 +56,14 @@ def pairwise_kl_loss(
     example_weights: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
-    KL 散度损失，按近邻相似度加权.
+    KL divergence loss, weighted by neighbour similarities.
 
     Args:
-        logits: [n, d] 当前样本 logits
-        neighbourhood_logits: [m, d] 近邻池的 logits（如 one-hot）
+        logits: [n, d] current sample logits
+        neighbourhood_logits: [m, d] neighbour pool logits (e.g. one-hot)
         knn_indices: [n, k]
         knn_similarities: [n, k]
-        temperature: 温度
+        temperature: temperature
     """
     n, d = logits.shape
     k = knn_indices.shape[1]
@@ -96,7 +96,7 @@ def ncr_loss(
     example_weights: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
-    NCR 损失：logits 与近邻加权 logits 的 KL 散度.
+    NCR loss: KL divergence between logits and neighbour-weighted logits.
     """
     indices, similarities = get_knn(features, batch_features, k + 1)
     indices = indices[:, 1:]
@@ -117,15 +117,15 @@ def build_ncr_soft_labels(
     alpha: float = 0.5,
 ) -> torch.Tensor:
     """
-    用 K-NN 构建环境软标签，与脏标签融合.
+    Build environment soft labels via K-NN and fuse with dirty labels.
 
     Args:
         s_embeddings: [n_support, dim]
         support_labels: [n_support]
-        way: 类别数
-        k: 近邻数
-        smoothing_gamma: 相似度平滑
-        alpha: 环境标签权重，final = (1-alpha)*dirty + alpha*env
+        way: number of classes
+        k: number of neighbours
+        smoothing_gamma: similarity smoothing
+        alpha: env label weight, final = (1-alpha)*dirty + alpha*env
     Returns:
         support_soft_labels: [n_support, way]
     """

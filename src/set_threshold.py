@@ -77,9 +77,9 @@ df1.apply(lambda row: get_data(row, key='cic'), axis=1)
 plot_ecdf(data)
 
 
-# 确保列表列统一为 1D 列表，且长度至少为 NUM_PKTS（与 data loader 的 num_pkts 一致）
+# Ensure list columns are 1D lists with length at least NUM_PKTS (match data loader num_pkts)
 NUM_PKTS = 20
-PAD_VAL = 0.5  # DIR 用 0.5，其他用 -1（与 utility.py 的 pad_value 一致）
+PAD_VAL = 0.5  # DIR uses 0.5, others use -1 (match utility.py pad_value)
 
 def pad_to_len(x, col, target_len=NUM_PKTS):
     arr = np.atleast_1d(x).tolist()

@@ -53,7 +53,7 @@ def backward_corrected_label(P: torch.Tensor, observed_class: int, restrict_to_n
     Backward correction: P(true | obs) ∝ P(obs | true).
     soft_label[c] = P[c, observed] / sum_c P[c, observed].
 
-    If restrict_to_new: zero out old classes to avoid contaminating old-class prototypes (F1-old drop).
+    If restrict_to_new: zero out old classes to avoid contaminating old-class prototypes (prevents F1-old drop).
     """
     col = P[:, observed_class].clamp(min=1e-12)
     if restrict_to_new and num_old_classes > 0 and num_new_classes > 0:

@@ -179,7 +179,7 @@ def NN_proto(x_query, prototypes):
 
 
 def LR_weighted(x_support, y_support, x_query, sample_weight, lr=0.05, max_steps=200, weight_decay=1e-4):
-    """可微分的 LR，sample_weight 参与 loss，支持 backprop。"""
+    """Differentiable LR; sample_weight participates in loss, supports backprop."""
     device = x_query.device
     x_support = F.normalize(x_support, p=2, dim=1)
     x_query = F.normalize(x_query, p=2, dim=1)

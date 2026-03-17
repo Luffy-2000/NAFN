@@ -41,16 +41,16 @@ class DenoiseConfig:
     proto_iters: int = 2                  # Prototype iteration count (robust prototype)
     metric: Literal["cosine", "euclidean"] = "cosine"
 
-    # ===== DCML相关 =====
-    dcml_threshold: Optional[float] = None   # 若为 None，按 noise_ratio 分位自适应
+    # ===== DCML related =====
+    dcml_threshold: Optional[float] = None   # if None, adaptive by noise_ratio quantile
     dcml_head_type: Literal["linear", "cosine"] = "linear"
     dcml_head_epochs: int = 5
     dcml_head_lr: float = 1e-2
     dcml_head_weight_decay: float = 0.0
-    dcml_head_batch_size: int = 256          # 小样本可全量；放个上限以兼容较大类
-    dcml_head_temp: float = 1.0              # 对 logits 的温度缩放
-    dcml_min_keep: int = 1                   # 每类至少保留的样本数
-    dcml_use_class_balance: bool = True      # 交叉熵 class weight（按样本数反比）
+    dcml_head_batch_size: int = 256          # few-shot can use full batch; upper limit for larger classes
+    dcml_head_temp: float = 1.0              # temperature scaling for logits
+    dcml_min_keep: int = 1                   # minimum samples to keep per class
+    dcml_use_class_balance: bool = True      # CE class weight (inverse of sample count)
 
 class Denoiser:
     def __init__(self, cfg: DenoiseConfig):
@@ -79,7 +79,7 @@ class Denoiser:
         mask = torch.zeros_like(support_labels, dtype=torch.bool, device=device)
         sample_weights = None
 
-        # ===== 若使用 DCML：先基于全部“可见类”（旧+新）训练一个临时分类头 =====
+        # ===== If DCML: first train ephemeral head on all "visible classes" (old+new) =====
         head_fn = None
         class_id_list: List[int] = []
         if self.cfg.strategy == "DCML":
@@ -89,7 +89,7 @@ class Denoiser:
                 class_ids_all=class_id_list
             )
 
-        # ===== 若使用 proto_margin：预计算原型 =====
+        # ===== If proto_margin: pre-compute prototypes =====
         # Pre-compute prototypes for each class for prototype method (avoid repeated computation in loop)
         proto_map: Dict[int, torch.Tensor] = {}
         if self.cfg.strategy == "proto_margin":
@@ -136,7 +136,7 @@ class Denoiser:
                     X, proto_self=proto_self, other_protos=other_protos
                 )
             elif self.cfg.strategy == "DCML":
-                # 用临时分类头得到 logits → CE → 阈值/分位数过滤
+                # Use ephemeral head for logits -> CE -> threshold/quantile filtering
                 keep_mask_local = self._denoise_dcml_head(
                     X=X, y=y_local, head_fn=head_fn, class_ids_all=class_id_list
                 )
@@ -258,10 +258,10 @@ class Denoiser:
     # ----------------- DCML-HEAD branch -----------------
     def _denoise_dcml_head(
         self,
-        X: torch.Tensor,                  # (m, D) 当前类样本
+        X: torch.Tensor,                  # (m, D) current class samples
         y: torch.Tensor,                  # (m,)
-        head_fn,                          # 可调用：X -> logits(N,C)
-        class_ids_all: List[int],         # 头部训练时使用的全部类（用于 label->列索引）
+        head_fn,                          # callable: X -> logits(N,C)
+        class_ids_all: List[int],         # all classes used in head training (for label->col index)
     ) -> torch.Tensor:
         device = X.device
         m = X.size(0)
@@ -270,7 +270,7 @@ class Denoiser:
         if m <= 2:
             return torch.ones(m, dtype=torch.bool, device=device)
 
-        # label → 列索引
+        # label -> column index
         cls_to_col = {int(c): i for i, c in enumerate(class_ids_all)}
         y_idx = torch.tensor([cls_to_col[int(t.item())] for t in y], device=device, dtype=torch.long)
 
@@ -284,7 +284,7 @@ class Denoiser:
             rho = float(self.cfg.noise_ratio)
             n_keep = max(self.cfg.dcml_min_keep, int(round((1.0 - rho) * m)))
             n_keep = min(max(n_keep, 1), m)
-            keep_idx = torch.topk(-losses, k=n_keep, largest=True).indices  # 等价于按 loss 升序取前 n_keep
+            keep_idx = torch.topk(-losses, k=n_keep, largest=True).indices  # equiv. to ascending loss, take top n_keep
             keep_local = torch.zeros(m, dtype=torch.bool, device=device)
             keep_local[keep_idx] = True
 
@@ -295,27 +295,27 @@ class Denoiser:
 
     def _train_ephemeral_head(
         self,
-        X_all: torch.Tensor,              # (N, D) 全部支持集嵌入（旧+新）
+        X_all: torch.Tensor,              # (N, D) all support embeddings (old+new)
         y_all: torch.Tensor,              # (N,)
-        class_ids_all: List[int],         # 本 episode 中观测到的所有类（保持稳定次序）
+        class_ids_all: List[int],         # all classes observed in this episode (stable order)
     ):
         """
-        在当前 episode 内训练一个临时分类头（只训几轮），返回一个 head_fn(X)->logits 的可调用对象。
+        Train an ephemeral classification head within this episode (few epochs), return callable head_fn(X)->logits.
         """
         device = X_all.device
         N, D = X_all.size(0), X_all.size(1)
-        # 将标签映射到 [0, C-1] 的列索引
+        # Map labels to column indices [0, C-1]
         cls_to_col = {int(c): i for i, c in enumerate(class_ids_all)}
         y_idx = torch.tensor([cls_to_col[int(t.item())] for t in y_all], device=device, dtype=torch.long)
         C = len(class_ids_all)
 
-        # 头部
+        # Head
         if self.cfg.dcml_head_type == "cosine":
             head = _CosineHead(in_dim=D, out_dim=C, scale=max(self.cfg.dcml_head_temp, 1.0)).to(device)
         else:
             head = _LinearHead(in_dim=D, out_dim=C).to(device)
 
-        # class weight（可选）——按样本数反比，缓解类不平衡
+        # class weight (optional) - inverse of sample count, alleviate class imbalance
         if self.cfg.dcml_use_class_balance:
             counts = torch.bincount(y_idx, minlength=C).float()
             inv = 1.0 / (counts + 1e-12)
@@ -331,14 +331,14 @@ class Denoiser:
             weight_decay=self.cfg.dcml_head_weight_decay
         )
 
-        # 简单的小批量迭代（few-shot 可直接全量）
+        # Simple minibatch iteration (few-shot can use full batch)
         bs = min(self.cfg.dcml_head_batch_size, N)
 
-        # IMPORTANT: 训练需要开启梯度
+        # IMPORTANT: training requires gradients enabled
         with torch.enable_grad():
             head.train()
             for _ in range(max(self.cfg.dcml_head_epochs, 1)):
-                # 这里为了稳妥，做个打乱
+                # Shuffle for stability
                 perm = torch.randperm(N, device=device)
                 X_shuf = X_all[perm]
                 y_shuf = y_idx[perm]
@@ -348,7 +348,7 @@ class Denoiser:
                     yb = y_shuf[start:end]
                     optim.zero_grad(set_to_none=True)
                     logits = head(xb)
-                    # 线性头可选温度缩放
+                    # Linear head optional temperature scaling
                     if self.cfg.dcml_head_type == "linear" and self.cfg.dcml_head_temp != 1.0:
                         logits = logits / max(self.cfg.dcml_head_temp, 1e-6)
                     loss = criterion(logits, yb)
@@ -357,7 +357,7 @@ class Denoiser:
 
         head.eval()
 
-        # 返回一个“推理函数”，供后续各类局部过滤使用（no grad）
+        # Return inference function for subsequent per-class filtering (no grad)
         @torch.no_grad()
         def head_fn(X: torch.Tensor) -> torch.Tensor:
             logits = head(X)
