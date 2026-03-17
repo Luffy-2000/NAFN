@@ -168,6 +168,45 @@ def NN_soft(x_support, support_soft_labels, x_query):
     return soft_values, y_pred
 
 
+def NN_proto(x_query, prototypes):
+    """Classify by distance to given prototypes. prototypes: (way, dim)."""
+    device = x_query.device
+    prototypes = prototypes.to(device)
+    distances = torch.cdist(x_query, prototypes)
+    soft_values = torch.softmax(-distances, dim=1)
+    y_pred = torch.argmax(soft_values, dim=1)
+    return soft_values, y_pred
+
+
+def LR_weighted(x_support, y_support, x_query, sample_weight, lr=0.05, max_steps=200, weight_decay=1e-4):
+    """可微分的 LR，sample_weight 参与 loss，支持 backprop。"""
+    device = x_query.device
+    x_support = F.normalize(x_support, p=2, dim=1)
+    x_query = F.normalize(x_query, p=2, dim=1)
+    sample_weight = sample_weight.to(device=device, dtype=x_support.dtype)
+    num_classes = int(y_support.max().item()) + 1
+
+    classifier = nn.Linear(x_support.size(1), num_classes).to(device)
+    optimizer = torch.optim.Adam(classifier.parameters(), lr=lr, weight_decay=weight_decay)
+
+    with torch.enable_grad():
+        classifier.train()
+        for _ in range(max_steps):
+            optimizer.zero_grad(set_to_none=True)
+            logits = classifier(x_support)
+            ce_per_sample = F.cross_entropy(logits, y_support, reduction='none')
+            loss = (sample_weight * ce_per_sample).sum() / (sample_weight.sum() + 1e-12)
+            loss.backward()
+            optimizer.step()
+
+    classifier.eval()
+    with torch.no_grad():
+        logits = classifier(x_query)
+        soft_values = F.softmax(logits, dim=1)
+        y_pred = torch.argmax(logits, dim=1)
+    return soft_values, y_pred
+
+
 def LR_soft(x_support, support_soft_labels, x_query, lr=0.1, max_steps=100, weight_decay=1e-4):
     """Fit a linear soft-label head on support embeddings and classify queries."""
     device = x_support.device

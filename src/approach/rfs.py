@@ -10,10 +10,12 @@ import copy
 from approach.tl_module import LightningTLModule
 from modules.losses import DistillKLLoss
 from modules.teachers import Teacher
-from modules.classifiers import NN, LR, NN_soft, LR_soft
+from modules.classifiers import NN, LR, NN_soft, LR_soft, NN_proto, LR_weighted
+from modules.transformer_proto import TransformerProto
 from util.traffic_transformations import permutation, pkt_translating, wrap
 from util.denoising import Denoiser, DenoiseConfig
 from util.noise_utils import get_mus_hat, S_to_T, backward_corrected_label
+from util.ncr import build_ncr_soft_labels
 from sklearn.neighbors import NearestNeighbors
 EPSILON = 1e-8
 
@@ -127,9 +129,27 @@ class LightningRFS(LightningTLModule):
 
         self.denoising = kwargs.get('denoising', 'none')
         self.supplement_method = kwargs.get('supplement_method', 'sample')  # none | sample | mixup | smote
+        self.ncr_k = kwargs.get('ncr_k', 5)
+        self.ncr_gamma = kwargs.get('ncr_gamma', 2.0)
+        self.ncr_alpha = kwargs.get('ncr_alpha', 0.5)
         self.classes_per_set = kwargs.get('classes_per_set', [10, 5])
         self.num_old_classes = self.classes_per_set[0]
         self.num_new_classes = self.classes_per_set[1]
+
+        # TraNFS: Transformer 作为降噪，需在 adaptation 时训练
+        self.transformer_proto = None
+        self.transformer_optimizer = None
+        if self.denoising == 'TraNFS':
+            feat_dim = getattr(self.net.model, 'out_features_size', 320)
+            max_way = max(self.num_old_classes + self.num_new_classes, 20)
+            max_shot = max(self.shots, 50)
+            self.transformer_proto = TransformerProto(
+                d_model=feat_dim, nhead=8, num_layers=2,
+                max_way=max_way, max_shot=max_shot, dropout=0.1,
+            )
+            self.transformer_optimizer = torch.optim.Adam(
+                self.transformer_proto.parameters(), lr=1e-4, weight_decay=1e-5
+            )
 
         self.teacher = Teacher(
             net=self.net, 
@@ -204,6 +224,8 @@ class LightningRFS(LightningTLModule):
     
     def on_adaptation_start(self):
         self.net.freeze_backbone()
+        if self.denoising == 'TraNFS':
+            self.transformer_proto.train()
         
     def training_epoch_end(self, _):
         # Save the network state dict since it can be used to inizialize the Teacher
@@ -417,29 +439,43 @@ class LightningRFS(LightningTLModule):
 
         return support_soft_labels
 
-    @torch.no_grad()
     def ft_step(self, dist_calibrator, batch):
-        # Grad disabled since the backbone is frozen and a fully-connected head is not used
         self.net.eval()
         self.dist_calibrator = dist_calibrator
         data, labels = batch
         labels, le = self.label_encoding(labels)
-        # print('labels', labels)
-
         way = labels.unique().size(0)
-        
-        # Embed the input
-        _, feats, _ = self.net(data, return_features=True)
-        # print('feats.shape', feats.shape)
-        
-        s_embeddings, support_labels = feats[:way * self.shots], labels[:way * self.shots]
-        q_embeddings, query_labels = feats[way * self.shots:], labels[way * self.shots:]
-        # print('support_labels', support_labels)
-        # print('query_labels', query_labels)
-        
+
+        # 固定 net，提取 embedding（无梯度）
+        with torch.no_grad():
+            _, feats, _ = self.net(data, return_features=True)
+        s_embeddings = feats[:way * self.shots].detach()
+        support_labels = labels[:way * self.shots]
+        q_embeddings = feats[way * self.shots:].detach()
+        query_labels = labels[way * self.shots:]
+
         support_soft_labels = None
         sample_weights = None
-        if self.denoising == 'CSIDN':
+        prototypes = None
+
+        if self.denoising == 'TraNFS':
+            # TraNFS: Transformer 聚合 support，输出 prototypes 和 sample_weights
+            self.transformer_proto.to(s_embeddings.device)
+            self.transformer_proto.train()
+            prototypes, sample_weights = self.transformer_proto(
+                s_embeddings, support_labels, way, self.shots
+            )
+        elif self.denoising == 'NCR':
+            # NCR: K-NN 近邻得到环境标签，与脏标签融合
+            support_soft_labels = build_ncr_soft_labels(
+                s_embeddings=s_embeddings,
+                support_labels=support_labels,
+                way=way,
+                k=self.ncr_k,
+                smoothing_gamma=self.ncr_gamma,
+                alpha=self.ncr_alpha,
+            )
+        elif self.denoising == 'CSIDN':
             # CSIDN: Confidence Scores for Instance-dependent Noise; keeps all support, softens new-class targets.
             support_soft_labels = self._build_transition_soft_labels(
                 s_embeddings=s_embeddings,
@@ -464,8 +500,8 @@ class LightningRFS(LightningTLModule):
                 num_new_classes=self.num_new_classes,
             )
 
-        # 消融：去噪后可选 不补充 / 分布采样 / Mixup / SMOTE（CSIDN 不参与补充）
-        if self.denoising not in ('none', 'CSIDN') and self.supplement_method != 'none':
+        # 消融：去噪后可选 不补充 / 分布采样 / Mixup / SMOTE（CSIDN、TraNFS、NCR 不参与补充）
+        if self.denoising not in ('none', 'CSIDN', 'TraNFS', 'NCR') and self.supplement_method != 'none':
             new_class_ids = set(range(self.num_old_classes, self.num_old_classes + self.num_new_classes))
             new_support_features = []
             new_support_labels = []
@@ -497,7 +533,26 @@ class LightningRFS(LightningTLModule):
                 s_embeddings = torch.cat([s_embeddings, torch.tensor(new_support_features, device=s_embeddings.device, dtype=s_embeddings.dtype)], dim=0)
                 support_labels = torch.cat([support_labels, torch.tensor(new_support_labels, device=support_labels.device, dtype=support_labels.dtype)], dim=0)
 
-        if self.denoising == 'CSIDN' and self.base_learner == 'lr':
+        if self.denoising == 'TraNFS':
+            # 用 NN_proto 的 loss 训练 Transformer（prototypes 可导）
+            proto_soft, _ = NN_proto(x_query=q_embeddings, prototypes=prototypes)
+            proto_soft = proto_soft.clamp(EPSILON, 1 - EPSILON).to(self._device)
+            eval_loss = self.nl_loss(proto_soft.log(), query_labels)
+            self.transformer_optimizer.zero_grad(set_to_none=True)
+            eval_loss.backward()
+            self.transformer_optimizer.step()
+            # 最终预测：NN 用 prototypes，LR 用 sample_weights
+            if self.base_learner == 'nn':
+                soft_values, y_pred = proto_soft, torch.argmax(proto_soft, dim=1)
+            else:
+                soft_values, y_pred = LR_weighted(
+                    x_support=s_embeddings,
+                    y_support=support_labels,
+                    x_query=q_embeddings,
+                    sample_weight=sample_weights,
+                )
+                soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
+        elif self.denoising in ('NCR', 'CSIDN') and self.base_learner == 'lr':
             soft_values, y_pred = LR_soft(
                 x_support=s_embeddings,
                 support_soft_labels=support_soft_labels,
@@ -505,7 +560,7 @@ class LightningRFS(LightningTLModule):
             )
             soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
             eval_loss = self.nl_loss(soft_values.log(), query_labels)
-        elif self.denoising == 'CSIDN' and self.base_learner == 'nn':
+        elif self.denoising in ('NCR', 'CSIDN') and self.base_learner == 'nn':
             soft_values, y_pred = NN_soft(
                 x_support=s_embeddings,
                 support_soft_labels=support_soft_labels,
