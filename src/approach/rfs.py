@@ -1,4 +1,5 @@
 import os
+import time
 import torch
 import learn2learn as l2l
 from torch import nn
@@ -18,6 +19,11 @@ from util.noise_utils import get_mus_hat, S_to_T, backward_corrected_label
 from util.ncr import build_ncr_soft_labels
 from sklearn.neighbors import NearestNeighbors
 EPSILON = 1e-8
+
+
+def _sync_cuda():
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
 
 
 def _mixup_supplement(features: np.ndarray, n_synthetic: int, lam_range=(0.2, 0.8), rng=None) -> np.ndarray:
@@ -446,13 +452,22 @@ class LightningRFS(LightningTLModule):
         labels, le = self.label_encoding(labels)
         way = labels.unique().size(0)
 
-        # Freeze net, extract embeddings (no grad)
+        # Backbone inference time (encoder forward only)
+        _sync_cuda()
+        t_backbone0 = time.perf_counter()
         with torch.no_grad():
             _, feats, _ = self.net(data, return_features=True)
+        _sync_cuda()
+        backbone_time_ms = (time.perf_counter() - t_backbone0) * 1000.0
+
         s_embeddings = feats[:way * self.shots].detach()
         support_labels = labels[:way * self.shots]
         q_embeddings = feats[way * self.shots:].detach()
         query_labels = labels[way * self.shots:]
+        n_query = int(q_embeddings.size(0))
+
+        _sync_cuda()
+        t_head0 = time.perf_counter()
 
         support_soft_labels = None
         sample_weights = None
@@ -573,7 +588,6 @@ class LightningRFS(LightningTLModule):
                 x_support=s_embeddings,
                 y_support=support_labels,
                 x_query=q_embeddings,
-                sample_weight=sample_weights,
             )
             soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
             eval_loss = self.nl_loss(soft_values.log(), query_labels)
@@ -582,7 +596,6 @@ class LightningRFS(LightningTLModule):
                 x_support=s_embeddings,
                 y_support=support_labels,
                 x_query=q_embeddings,
-                sample_weight=sample_weights,
             )
             soft_values = soft_values.clamp(EPSILON, 1 - EPSILON).to(self._device)
             eval_loss = self.nl_loss(soft_values.log(), query_labels)
@@ -598,8 +611,13 @@ class LightningRFS(LightningTLModule):
         #     eval_loss = torch.zeros(1)
         
         y_pred = y_pred.to(self._device)
-        query_accuracy = (y_pred == query_labels).sum().float() / y_pred.size(0)  
-        
+        query_accuracy = (y_pred == query_labels).sum().float() / y_pred.size(0)
+
+        _sync_cuda()
+        head_time_ms = (time.perf_counter() - t_head0) * 1000.0
+        total_inference_ms = backbone_time_ms + head_time_ms
+        ms_per_query = total_inference_ms / max(n_query, 1)
+
         return {
             'loss': eval_loss,
             'accuracy': query_accuracy,
@@ -609,5 +627,9 @@ class LightningRFS(LightningTLModule):
             'logits': soft_values,
             'le_map': le,
             'support': s_embeddings,
-            'query': q_embeddings
+            'query': q_embeddings,
+            'backbone_time_ms': torch.tensor(backbone_time_ms, dtype=torch.float64),
+            'head_time_ms': torch.tensor(head_time_ms, dtype=torch.float64),
+            'n_query': torch.tensor(n_query, dtype=torch.long),
+            'inference_ms_per_query': torch.tensor(ms_per_query, dtype=torch.float64),
         }

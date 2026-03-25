@@ -228,6 +228,14 @@ class LightningTLModule(LightningModule):
             if 'preds' in save_outs:
                 np.savez_compressed(f'{save_path}preds.npz', 
                                     preds=save_outs['preds'])
+            if 'backbone_time_ms' in save_outs:
+                np.savez_compressed(
+                    f'{save_path}inference_times.npz',
+                    backbone_time_ms=np.asarray(save_outs['backbone_time_ms'], dtype=np.float64),
+                    head_time_ms=np.asarray(save_outs['head_time_ms'], dtype=np.float64),
+                    n_query=np.asarray(save_outs['n_query'], dtype=np.int64),
+                    inference_ms_per_query=np.asarray(save_outs['inference_ms_per_query'], dtype=np.float64),
+                )
         else:
             raise ValueError('bad folder_name')
         
